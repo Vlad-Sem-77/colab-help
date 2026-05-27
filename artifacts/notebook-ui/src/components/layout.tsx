@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Book, History, Settings } from "lucide-react";
+import { Book, History, Settings, Download } from "lucide-react";
 import { useColabUrl } from "@/hooks/use-colab-url";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -31,19 +31,29 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </Link>
         </nav>
 
-        <div className="p-4 border-t border-border bg-muted/30">
+        <div className="p-4 border-t border-border bg-muted/30 space-y-3">
           <div className="space-y-2">
-            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-2">
+            <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
               <Settings className="w-4 h-4" />
               <span>Colab Connection</span>
             </div>
-            <Input 
-              placeholder="https://...ngrok-free.app" 
+            <Input
+              placeholder="https://...ngrok-free.app"
               value={colabUrl}
               onChange={(e) => setColabUrl(e.target.value)}
               className="bg-background text-xs"
+              data-testid="input-colab-url"
             />
+            <p className="text-[10px] text-muted-foreground leading-tight">
+              Вставьте ngrok URL из вывода ячейки Colab
+            </p>
           </div>
+          <a href="/api/colab/notebook" download="colab_backend.ipynb">
+            <Button variant="outline" size="sm" className="w-full text-xs gap-1.5">
+              <Download className="w-3 h-3" />
+              Скачать Colab-ноутбук
+            </Button>
+          </a>
         </div>
       </div>
 

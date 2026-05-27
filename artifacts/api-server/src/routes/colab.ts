@@ -1,5 +1,7 @@
 import { Router, type IRouter } from "express";
 import fetch from "node-fetch";
+import fs from "fs";
+import path from "path";
 import { db, historyTable } from "@workspace/db";
 import {
   PingColabBody,
@@ -8,6 +10,17 @@ import {
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
+
+router.get("/colab/notebook", (_req, res): void => {
+  const notebookPath = path.resolve(process.cwd(), "..", "..", "colab_backend.ipynb");
+  if (!fs.existsSync(notebookPath)) {
+    res.status(404).json({ error: "Notebook file not found" });
+    return;
+  }
+  res.setHeader("Content-Disposition", 'attachment; filename="colab_backend.ipynb"');
+  res.setHeader("Content-Type", "application/json");
+  res.sendFile(notebookPath);
+});
 
 router.post("/colab/ping", async (req, res): Promise<void> => {
   const parsed = PingColabBody.safeParse(req.body);
