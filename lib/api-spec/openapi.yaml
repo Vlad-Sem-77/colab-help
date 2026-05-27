@@ -3,13 +3,17 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Replit-Colab Bridge API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: colab
+    description: Colab connection and execution
+  - name: history
+    description: Experiment history
 paths:
   /healthz:
     get:
@@ -24,6 +28,116 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /colab/ping:
+    post:
+      operationId: pingColab
+      tags: [colab]
+      summary: Check Colab connection
+      description: Pings the Colab Flask server to verify it is reachable
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ColabUrlInput"
+      responses:
+        "200":
+          description: Connection status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ColabPingResult"
+        "400":
+          description: Bad request
+
+  /colab/models:
+    post:
+      operationId: fetchFreeModels
+      tags: [colab]
+      summary: Fetch list of free models from Colab
+      description: Asks the Colab server to fetch free models from OpenRouter
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ColabUrlInput"
+      responses:
+        "200":
+          description: List of free models
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FreeModelsResult"
+        "400":
+          description: Bad request
+
+  /colab/run:
+    post:
+      operationId: runExperiment
+      tags: [colab]
+      summary: Run an experiment via Colab
+      description: Sends a generation task to the Colab Flask server
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExperimentInput"
+      responses:
+        "200":
+          description: Experiment result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExperimentResult"
+        "400":
+          description: Bad request
+        "502":
+          description: Colab server error
+
+  /history:
+    get:
+      operationId: listHistory
+      tags: [history]
+      summary: Get experiment history
+      description: Returns the list of recent experiments
+      responses:
+        "200":
+          description: List of history entries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/HistoryEntry"
+    delete:
+      operationId: clearHistory
+      tags: [history]
+      summary: Clear experiment history
+      description: Deletes all experiment history
+      responses:
+        "204":
+          description: History cleared
+
+  /history/{id}:
+    delete:
+      operationId: deleteHistoryEntry
+      tags: [history]
+      summary: Delete a history entry
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Entry deleted
+        "404":
+          description: Entry not found
+
 components:
   schemas:
     HealthStatus:
@@ -34,3 +148,183 @@ components:
       required:
         - status
 
+    ColabUrlInput:
+      type: object
+      required: [colabUrl]
+      properties:
+        colabUrl:
+          type: string
+          description: ngrok URL of the Colab Flask server
+
+    ColabPingResult:
+      type: object
+      required: [online, message]
+      properties:
+        online:
+          type: boolean
+        message:
+          type: string
+
+    FreeModel:
+      type: object
+      required: [id, name, contextLength]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        contextLength:
+          type: integer
+        topProvider:
+          type: ["string", "null"]
+        averageRating:
+          type: ["number", "null"]
+
+    FreeModelsResult:
+      type: object
+      required: [models, count]
+      properties:
+        models:
+          type: array
+          items:
+            $ref: "#/components/schemas/FreeModel"
+        count:
+          type: integer
+
+    ExperimentInput:
+      type: object
+      required: [colabUrl, taskType, mode, params]
+      properties:
+        colabUrl:
+          type: string
+        taskType:
+          type: string
+          enum: [text_generation, model_comparison, system_prompt, custom_code]
+        mode:
+          type: string
+          enum: [auto, manual]
+        model:
+          type: ["string", "null"]
+        models:
+          type: array
+          items:
+            type: string
+        params:
+          $ref: "#/components/schemas/ExperimentParams"
+
+    ExperimentParams:
+      type: object
+      required: [prompt, temperature, maxTokens]
+      properties:
+        prompt:
+          type: string
+        temperature:
+          type: number
+        maxTokens:
+          type: integer
+        systemPrompt:
+          type: ["string", "null"]
+        customCode:
+          type: ["string", "null"]
+
+    ModelCard:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        topProvider:
+          type: ["string", "null"]
+        contextLength:
+          type: ["integer", "null"]
+        averageRating:
+          type: ["number", "null"]
+        description:
+          type: ["string", "null"]
+
+    ExperimentMetrics:
+      type: object
+      required: [promptTokens, completionTokens, totalTokens, executionTime]
+      properties:
+        promptTokens:
+          type: integer
+        completionTokens:
+          type: integer
+        totalTokens:
+          type: integer
+        executionTime:
+          type: number
+
+    ComparisonItem:
+      type: object
+      required: [modelId, result, metrics]
+      properties:
+        modelId:
+          type: string
+        result:
+          type: string
+        metrics:
+          $ref: "#/components/schemas/ExperimentMetrics"
+        error:
+          type: ["string", "null"]
+
+    ExperimentResult:
+      type: object
+      required: [status, taskType, mode]
+      properties:
+        status:
+          type: string
+          enum: [ok, error]
+        taskType:
+          type: string
+        mode:
+          type: string
+        result:
+          type: ["string", "null"]
+        modelCard:
+          $ref: "#/components/schemas/ModelCard"
+        metrics:
+          $ref: "#/components/schemas/ExperimentMetrics"
+        comparisons:
+          type: array
+          items:
+            $ref: "#/components/schemas/ComparisonItem"
+        error:
+          type: ["string", "null"]
+
+    HistoryEntry:
+      type: object
+      required: [id, taskType, mode, createdAt]
+      properties:
+        id:
+          type: integer
+        taskType:
+          type: string
+        mode:
+          type: string
+        model:
+          type: ["string", "null"]
+        prompt:
+          type: string
+        result:
+          type: ["string", "null"]
+        promptTokens:
+          type: ["integer", "null"]
+        completionTokens:
+          type: ["integer", "null"]
+        totalTokens:
+          type: ["integer", "null"]
+        executionTime:
+          type: ["number", "null"]
+        modelName:
+          type: ["string", "null"]
+        modelProvider:
+          type: ["string", "null"]
+        modelContextLength:
+          type: ["integer", "null"]
+        createdAt:
+          type: string

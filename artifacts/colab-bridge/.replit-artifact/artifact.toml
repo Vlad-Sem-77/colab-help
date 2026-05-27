@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Replit ↔ Colab Bridge"
+version = "1.0.0"
+id = "artifacts/colab-bridge"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 19913
+
+[services.development]
+run = "pnpm --filter @workspace/colab-bridge run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/colab-bridge", "run", "build" ]
+publicDir = "artifacts/colab-bridge/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19913"
+BASE_PATH = "/"
