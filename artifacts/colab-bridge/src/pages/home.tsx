@@ -34,7 +34,7 @@ export default function Home() {
   const { toast } = useToast();
   
   // Persisted state
-  const [colabUrl, setColabUrl] = useState(() => localStorage.getItem("bridge_colabUrl") || "");
+  const [colabUrl, setColabUrl] = useState(() => localStorage.getItem("colab_url") || "");
   
   // Connection state
   const [isPingOk, setIsPingOk] = useState<boolean | null>(null);
@@ -57,7 +57,7 @@ export default function Home() {
   const [experimentResult, setExperimentResult] = useState<ExperimentResult | null>(null);
 
   useEffect(() => {
-    localStorage.setItem("bridge_colabUrl", colabUrl);
+    localStorage.setItem("colab_url", colabUrl);
   }, [colabUrl]);
 
   // API Hooks
