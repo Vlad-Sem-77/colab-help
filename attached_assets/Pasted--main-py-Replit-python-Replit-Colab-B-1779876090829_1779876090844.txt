@@ -1,0 +1,674 @@
+Напишу полный код `main.py` для Replit с учётом всех требований.
+
+```python
+"""
+Replit ↔ Colab Bridge v2.0
+Интерактивный пульт для экспериментов с бесплатными LLM через OpenRouter
+"""
+
+import streamlit as st
+import requests
+import json
+import pandas as pd
+from datetime import datetime
+import time
+
+# ============================================================
+# КОНФИГУРАЦИЯ СТРАНИЦЫ
+# ============================================================
+st.set_page_config(
+    page_title="Replit ↔ Colab Bridge",
+    page_icon="🔬",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# ============================================================
+# ИНИЦИАЛИЗАЦИЯ SESSION STATE
+# ============================================================
+if "history" not in st.session_state:
+    st.session_state.history = []
+
+if "colab_online" not in st.session_state:
+    st.session_state.colab_online = False
+
+if "free_models" not in st.session_state:
+    st.session_state.free_models = []
+
+if "last_response" not in st.session_state:
+    st.session_state.last_response = None
+
+if "last_params" not in st.session_state:
+    st.session_state.last_params = None
+
+if "last_model_card" not in st.session_state:
+    st.session_state.last_model_card = None
+
+# ============================================================
+# ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ
+# ============================================================
+
+def check_colab_health(url):
+    """Проверка соединения с Colab"""
+    try:
+        response = requests.get(f"{url}/health", timeout=5)
+        return response.status_code == 200
+    except:
+        return False
+
+def load_free_models(url):
+    """Загрузка списка бесплатных моделей через Colab"""
+    try:
+        response = requests.get(f"{url}/models/free", timeout=10)
+        if response.status_code == 200:
+            data = response.json()
+            return data.get("models", [])
+        return []
+    except Exception as e:
+        st.error(f"Ошибка загрузки моделей: {e}")
+        return []
+
+def send_to_colab(url, payload):
+    """Отправка задания в Colab"""
+    try:
+        response = requests.post(f"{url}/run", json=payload, timeout=60)
+        if response.status_code == 200:
+            return response.json()
+        else:
+            return {"status": "error", "message": f"HTTP {response.status_code}: {response.text}"}
+    except requests.exceptions.Timeout:
+        return {"status": "error", "message": "Превышено время ожидания (60 сек)"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+def generate_cell_code(task_type, mode, model_name, model_card, params, result_text):
+    """Генерация Python-кода для вставки в Colab"""
+    
+    # Собираем карточку модели как комментарий
+    card_comment = ""
+    if model_card:
+        card_comment = f"""
+# КАРТОЧКА МОДЕЛИ:
+#   Название:    {model_card.get('name', model_name)}
+#   Провайдер:   {model_card.get('top_provider', 'N/A')}
+#   Контекст:    {model_card.get('context_length', 'N/A')} токенов
+#   Цена:        $0.00 / млн токенов
+#   Рейтинг:     {model_card.get('average_rating', 'N/A')} / 5.0
+# """
+    
+    # Собираем параметры как комментарий
+    params_comment = f"""# Параметры запроса:
+#   Temperature: {params.get('temperature', 'N/A')}
+#   Max tokens:  {params.get('max_tokens', 'N/A')}
+#   System:      {repr(params.get('system_prompt', '')) if params.get('system_prompt') else 'Нет'}
+#   Промпт:      {repr(params.get('prompt', ''))}
+"""
+    
+    # Формируем блок messages
+    messages_block = "messages=[\n"
+    if params.get('system_prompt'):
+        messages_block += f'        {{"role": "system", "content": {repr(params["system_prompt"])}}},\n'
+    messages_block += f'        {{"role": "user", "content": {repr(params.get("prompt", ""))}}}\n    ]'
+    
+    # Если несколько моделей (сравнение)
+    if task_type == "model_comparison" and params.get("models"):
+        models_list = params["models"]
+        models_str = ", ".join([f'"{m}"' for m in models_list])
+        code = f'''# ============================================================
+# Сгенерировано Replit ↔ Colab Bridge
+# Дата: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+# Режим: {"Автовыбор free-модели" if mode == "auto" else "Ручной выбор"}
+# {"Карточка недоступна (сравнение моделей)" if not model_card else card_comment}
+# ------------------------------------------------------------
+{params_comment}
+# Сравнение моделей: {models_str}
+# ============================================================
+
+import openai
+
+client = openai.OpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key="ВАШ_КЛЮЧ",
+)
+
+models_to_compare = {models_list}
+
+for model_name in models_to_compare:
+    print(f"\\n{{'='*50}}")
+    print(f"Модель: {{model_name}}")
+    print(f"{{'='*50}}")
+    
+    response = client.chat.completions.create(
+        model=model_name,
+        {messages_block},
+        temperature={params.get("temperature", 0.7)},
+        max_tokens={params.get("max_tokens", 200)},
+    )
+    
+    print(f"Токенов запроса: {{response.usage.prompt_tokens}}")
+    print(f"Токенов ответа: {{response.usage.completion_tokens}}")
+    print(f"{{'-'*40}}")
+    print(response.choices[0].message.content)
+
+print("\\nСравнение завершено.")
+# ============================================================
+'''
+    else:
+        # Одиночный запрос
+        model_line = f'model="{model_name}",' if model_name else '# model не указан (автовыбор)'
+        
+        code = f'''# ============================================================
+# Сгенерировано Replit ↔ Colab Bridge
+# Дата: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+# Режим: {"Автовыбор free-модели" if mode == "auto" else "Ручной выбор"}
+{card_comment}
+# ------------------------------------------------------------
+{params_comment}
+# ============================================================
+
+import openai
+
+client = openai.OpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key="ВАШ_КЛЮЧ",
+)
+
+response = client.chat.completions.create(
+    {model_line}
+    {messages_block},
+    temperature={params.get("temperature", 0.7)},
+    max_tokens={params.get("max_tokens", 200)},
+)
+
+print("Модель:", response.model)
+print("Токенов запроса:", response.usage.prompt_tokens)
+print("Токенов ответа:", response.usage.completion_tokens)
+print("-" * 40)
+print(response.choices[0].message.content)
+# ============================================================
+'''
+    return code
+
+def generate_txt_report(task_type, mode, model_card, params, metrics, result_text):
+    """Генерация TXT-отчёта"""
+    report = f"""============================================================
+Replit ↔ Colab Bridge — Отчёт об эксперименте
+============================================================
+Дата: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+Задание: {task_type}
+Режим: {"Автовыбор free-модели" if mode == "auto" else "Ручной выбор"}
+"""
+
+    if model_card:
+        report += f"""
+--- Карточка модели ---
+Название: {model_card.get('name', 'N/A')}
+Провайдер: {model_card.get('top_provider', 'N/A')}
+Контекст: {model_card.get('context_length', 'N/A')} токенов
+Цена: $0.00 / млн токенов
+Рейтинг: {model_card.get('average_rating', 'N/A')} / 5.0
+"""
+
+    report += f"""
+--- Параметры ---
+"""
+    for key, value in params.items():
+        report += f"{key}: {value}\n"
+
+    if metrics:
+        report += f"""
+--- Метрики ---
+Токенов запроса: {metrics.get('prompt_tokens', 'N/A')}
+Токенов ответа: {metrics.get('completion_tokens', 'N/A')}
+Всего токенов: {metrics.get('total_tokens', 'N/A')}
+Время выполнения: {metrics.get('execution_time', 'N/A')} сек
+"""
+
+    report += f"""
+--- Ответ модели ---
+{result_text}
+============================================================
+"""
+    return report
+
+# ============================================================
+# ИНТЕРФЕЙС
+# ============================================================
+
+# Заголовок
+st.title("🔬 Replit ↔ Colab Bridge v2.0")
+st.caption("Интерактивный пульт для экспериментов с бесплатными LLM через OpenRouter")
+
+# ============================================================
+# БОКОВАЯ ПАНЕЛЬ
+# ============================================================
+with st.sidebar:
+    st.header("⚙️ Настройки подключения")
+    
+    # URL Colab
+    colab_url = st.text_input(
+        "Ngrok URL вашего Colab",
+        value=st.session_state.get("colab_url", ""),
+        placeholder="https://xxxx-xx-xxx-xxx-xx.ngrok.io",
+        help="Скопируйте URL из вывода ячейки ngrok в Colab"
+    )
+    
+    # Убираем слеш в конце если есть
+    if colab_url.endswith("/"):
+        colab_url = colab_url[:-1]
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("🔍 Проверить", use_container_width=True):
+            if colab_url:
+                with st.spinner("Проверка..."):
+                    st.session_state.colab_online = check_colab_health(colab_url)
+                if st.session_state.colab_online:
+                    st.success("🟢 Онлайн")
+                else:
+                    st.error("🔴 Офлайн — проверьте Colab")
+    
+    with col2:
+        if st.session_state.colab_online:
+            st.markdown("### 🟢")
+        else:
+            st.markdown("### 🔴")
+    
+    st.divider()
+    
+    # Выбор задания
+    st.header("📋 Тип задания")
+    task_type = st.selectbox(
+        "Выберите задание",
+        [
+            "Генерация текста",
+            "Сравнение моделей",
+            "System prompt engineering",
+            "Кастомный код"
+        ],
+        help="Тип нейросетевого эксперимента"
+    )
+    
+    st.divider()
+    
+    # Режим выбора модели
+    st.header("🎯 Режим выбора модели")
+    mode = st.radio(
+        "Как выбирать модель?",
+        ["🔀 Автовыбор (OpenRouter сам подберёт free)", "🎯 Ручной выбор из списка"],
+        help="Автовыбор — любая свободная модель. Ручной — вы выбираете конкретную."
+    )
+    
+    selected_model = None
+    
+    if "Ручной" in mode:
+        if st.button("📥 Загрузить список free-моделей", use_container_width=True):
+            if st.session_state.colab_online:
+                with st.spinner("Загружаю список..."):
+                    st.session_state.free_models = load_free_models(colab_url)
+                if st.session_state.free_models:
+                    st.success(f"Загружено моделей: {len(st.session_state.free_models)}")
+            else:
+                st.error("Сначала проверьте соединение с Colab")
+        
+        if st.session_state.free_models:
+            model_options = {m["id"]: m["name"] for m in st.session_state.free_models}
+            selected_model = st.selectbox(
+                "Выберите модель",
+                options=list(model_options.keys()),
+                format_func=lambda x: model_options[x]
+            )
+            
+            # Показываем карточку выбранной модели
+            if selected_model:
+                model_info = next(
+                    (m for m in st.session_state.free_models if m["id"] == selected_model),
+                    None
+                )
+                if model_info:
+                    with st.expander("📋 Характеристики выбранной модели", expanded=True):
+                        st.markdown(f"""
+                        - **Название:** {model_info.get('name', 'N/A')}
+                        - **Провайдер:** {model_info.get('top_provider', 'N/A')}
+                        - **Контекст:** {model_info.get('context_length', 'N/A'):,} токенов
+                        - **Цена:** $0.00
+                        - **Рейтинг:** {model_info.get('average_rating', 'N/A')} / 5.0
+                        """)
+                        if model_info.get('description'):
+                            st.caption(model_info['description'][:300] + "...")
+    
+    st.divider()
+    
+    # История
+    st.header("📜 История сессии")
+    if st.session_state.history:
+        with st.expander(f"Показать ({len(st.session_state.history)} записей)"):
+            history_df = pd.DataFrame(st.session_state.history)
+            st.dataframe(
+                history_df[["time", "task", "model", "tokens"]],
+                use_container_width=True,
+                hide_index=True
+            )
+    else:
+        st.caption("Пока пусто")
+
+# ============================================================
+# ОСНОВНАЯ ОБЛАСТЬ
+# ============================================================
+
+# Параметры в зависимости от типа задания
+st.header("🎛️ Параметры запроса")
+
+params = {}
+
+if task_type == "Генерация текста":
+    params["prompt"] = st.text_area(
+        "Промпт",
+        value="Напиши хокку про программирование",
+        height=100,
+        help="Текст запроса к модели"
+    )
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        params["temperature"] = st.slider(
+            "Temperature",
+            min_value=0.0,
+            max_value=2.0,
+            value=0.7,
+            step=0.1,
+            help="Креативность ответа: 0 = точно по шаблону, 2 = максимально творчески"
+        )
+    with col2:
+        params["max_tokens"] = st.slider(
+            "Max tokens",
+            min_value=10,
+            max_value=500,
+            value=200,
+            step=10,
+            help="Максимальная длина ответа в токенах"
+        )
+
+elif task_type == "Сравнение моделей":
+    params["prompt"] = st.text_area(
+        "Промпт",
+        value="Объясни, что такое нейросеть, простыми словами",
+        height=100
+    )
+    
+    # Если загружены модели — показываем multiselect
+    if st.session_state.free_models:
+        model_options = {m["id"]: m["name"] for m in st.session_state.free_models}
+        params["models"] = st.multiselect(
+            "Выберите модели для сравнения",
+            options=list(model_options.keys()),
+            format_func=lambda x: model_options[x],
+            default=list(model_options.keys())[:2] if len(model_options) >= 2 else list(model_options.keys()),
+            help="Выберите 2 или более моделей для сравнения ответов"
+        )
+    else:
+        st.warning("Сначала загрузите список моделей в боковой панели")
+        params["models"] = []
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        params["temperature"] = st.slider("Temperature", 0.0, 2.0, 0.7, 0.1)
+    with col2:
+        params["max_tokens"] = st.slider("Max tokens", 10, 500, 200, 10)
+
+elif task_type == "System prompt engineering":
+    params["system_prompt"] = st.text_area(
+        "System prompt",
+        value="Ты — помощник, который отвечает исключительно в стиле хокку",
+        height=100,
+        help="Системная инструкция, определяющая поведение модели"
+    )
+    params["prompt"] = st.text_area(
+        "User prompt",
+        value="Расскажи о машинном обучении",
+        height=80,
+        help="Пользовательский запрос"
+    )
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        params["temperature"] = st.slider("Temperature", 0.0, 2.0, 0.7, 0.1)
+    with col2:
+        params["max_tokens"] = st.slider("Max tokens", 10, 500, 200, 10)
+
+elif task_type == "Кастомный код":
+    st.info("""
+    Вставьте Python-код, который будет выполнен в Colab.
+    Используйте плейсхолдеры:
+    - `{prompt}` — текст промпта
+    - `{temperature}` — температура
+    - `{max_tokens}` — максимум токенов
+    - `{model}` — ID модели
+    """)
+    
+    params["custom_code"] = st.text_area(
+        "Ваш код",
+        value="""# Пример кастомного кода
+import openai
+
+client = openai.OpenAI(
+    base_url="https://openrouter.ai/api/v1",
+    api_key="ВАШ_КЛЮЧ",
+)
+
+response = client.chat.completions.create(
+    model="{model}",
+    messages=[{"role": "user", "content": "{prompt}"}],
+    temperature={temperature},
+    max_tokens={max_tokens},
+)
+
+print(response.choices[0].message.content)
+""",
+        height=250
+    )
+    
+    params["prompt"] = st.text_input("Промпт", value="Привет, мир!")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        params["temperature"] = st.slider("Temperature", 0.0, 2.0, 0.7, 0.1)
+    with col2:
+        params["max_tokens"] = st.slider("Max tokens", 10, 500, 200, 10)
+
+# ============================================================
+# КНОПКА ОТПРАВКИ
+# ============================================================
+st.divider()
+
+col_btn, col_status = st.columns([1, 3])
+
+with col_btn:
+    send_button = st.button(
+        "🚀 Отправить в Colab",
+        type="primary",
+        use_container_width=True,
+        disabled=not st.session_state.colab_online
+    )
+
+with col_status:
+    if not st.session_state.colab_online:
+        st.warning("⚠️ Подключитесь к Colab через боковую панель")
+
+# ============================================================
+# ОБРАБОТКА ОТПРАВКИ
+# ============================================================
+if send_button:
+    # Формируем payload
+    payload = {
+        "task_type": task_type,
+        "mode": "auto" if "Авто" in mode else "manual",
+        "model": selected_model if "Ручной" in mode else None,
+        "params": params
+    }
+    
+    # Убираем custom_code из params если есть — отправляем отдельно
+    if task_type == "Кастомный код":
+        payload["custom_code"] = params.pop("custom_code", "")
+    
+    with st.spinner("🔄 Отправляю запрос в Colab... Ожидайте ответа от free-модели..."):
+        start_time = time.time()
+        result = send_to_colab(colab_url, payload)
+        execution_time = round(time.time() - start_time, 2)
+    
+    # Обработка результата
+    if result.get("status") == "ok":
+        st.session_state.last_response = result.get("result", "")
+        st.session_state.last_params = params.copy()
+        st.session_state.last_model_card = result.get("model_card", {})
+        
+        # Сохраняем в историю
+        history_entry = {
+            "time": datetime.now().strftime("%H:%M:%S"),
+            "task": task_type,
+            "model": result.get("model_card", {}).get("name", result.get("model", "unknown")),
+            "tokens": result.get("usage", {}).get("total_tokens", "N/A")
+        }
+        st.session_state.history.append(history_entry)
+        
+        # Сохраняем метрики
+        st.session_state.last_metrics = {
+            "prompt_tokens": result.get("usage", {}).get("prompt_tokens", "N/A"),
+            "completion_tokens": result.get("usage", {}).get("completion_tokens", "N/A"),
+            "total_tokens": result.get("usage", {}).get("total_tokens", "N/A"),
+            "execution_time": execution_time
+        }
+        
+        st.success(f"✅ Ответ получен за {execution_time} сек")
+    else:
+        st.error(f"❌ Ошибка: {result.get('message', 'Неизвестная ошибка')}")
+        st.session_state.last_response = None
+        st.session_state.last_model_card = None
+        st.session_state.last_metrics = None
+
+# ============================================================
+# ОТОБРАЖЕНИЕ РЕЗУЛЬТАТА
+# ============================================================
+if st.session_state.last_response:
+    st.divider()
+    st.header("📊 Результат")
+    
+    # Карточка модели
+    if st.session_state.last_model_card:
+        with st.container():
+            st.subheader("🪪 Карточка модели")
+            
+            mc = st.session_state.last_model_card
+            
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Название", mc.get("name", "N/A")[:25])
+            with col2:
+                st.metric("Провайдер", mc.get("top_provider", "N/A"))
+            with col3:
+                st.metric("Контекст", f"{mc.get('context_length', 0):,}")
+            with col4:
+                st.metric("Рейтинг", f"{mc.get('average_rating', 'N/A')}/5")
+            
+            with st.expander("Подробнее"):
+                st.markdown(f"""
+                - **Полное название:** {mc.get('name', 'N/A')}
+                - **ID модели:** {mc.get('id', 'N/A')}
+                - **Контекстное окно:** {mc.get('context_length', 'N/A'):,} токенов
+                - **Цена:** $0.00 / млн токенов (free)
+                - **Тип:** {mc.get('type', 'N/A')}
+                - **Рейтинг:** {mc.get('average_rating', 'N/A')} / 5.0
+                """)
+                if mc.get('description'):
+                    st.caption(mc['description'][:500])
+    
+    # Метрики
+    if st.session_state.last_metrics:
+        st.subheader("📈 Метрики выполнения")
+        m = st.session_state.last_metrics
+        
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Токенов запроса", m["prompt_tokens"])
+        with col2:
+            st.metric("Токенов ответа", m["completion_tokens"])
+        with col3:
+            st.metric("Всего токенов", m["total_tokens"])
+        with col4:
+            st.metric("Время", f"{m['execution_time']} сек")
+    
+    # Ответ модели
+    st.subheader("💬 Ответ модели")
+    with st.container():
+        st.markdown(st.session_state.last_response)
+    
+    # Кнопки экспорта
+    st.divider()
+    st.subheader("📤 Экспорт")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if st.button("📋 Сгенерировать код для Colab", use_container_width=True):
+            code = generate_cell_code(
+                task_type=task_type,
+                mode="auto" if "Авто" in mode else "manual",
+                model_name=selected_model if "Ручной" in mode else st.session_state.last_model_card.get("id", ""),
+                model_card=st.session_state.last_model_card,
+                params=st.session_state.last_params,
+                result_text=st.session_state.last_response
+            )
+            st.session_state.generated_code = code
+            st.success("Код сгенерирован! Скопируйте блок ниже.")
+    
+    with col2:
+        if st.button("📄 Скачать TXT-отчёт", use_container_width=True):
+            report = generate_txt_report(
+                task_type=task_type,
+                mode="auto" if "Авто" in mode else "manual",
+                model_card=st.session_state.last_model_card,
+                params=st.session_state.last_params,
+                metrics=st.session_state.last_metrics,
+                result_text=st.session_state.last_response
+            )
+            st.download_button(
+                label="💾 Скачать отчёт",
+                data=report,
+                file_name=f"experiment_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt",
+                mime="text/plain",
+                use_container_width=True
+            )
+    
+    with col3:
+        if st.button("🗑️ Очистить результат", use_container_width=True):
+            st.session_state.last_response = None
+            st.session_state.last_params = None
+            st.session_state.last_model_card = None
+            st.session_state.last_metrics = None
+            st.rerun()
+    
+    # Отображение сгенерированного кода
+    if "generated_code" in st.session_state and st.session_state.generated_code:
+        st.divider()
+        st.subheader("📝 Сгенерированный код для Colab")
+        st.code(st.session_state.generated_code, language="python")
+        st.caption("👆 Скопируйте этот код и вставьте в новую ячейку вашего учебного ноутбука Colab")
+
+# ============================================================
+# ПОДВАЛ
+# ============================================================
+st.divider()
+st.caption("""
+🔬 Replit ↔ Colab Bridge v2.0 | Только бесплатные модели OpenRouter | API-ключ хранится только в Colab
+""")
+```
+
+Теперь нужен `requirements.txt`:
+
+```
+streamlit>=1.28.0
+requests>=2.31.0
+pandas>=2.1.0
+```
+
+И код для Colab-бэкенда напишу следующим сообщением. Его можно будет просто скопировать в ячейку Colab и запустить.
