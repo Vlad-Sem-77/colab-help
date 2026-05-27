@@ -166,7 +166,7 @@ export default function Home() {
 
   const handleRunCell = async (cell: NotebookCell) => {
     if (!colabUrl) {
-      toast({ title: "Colab URL required", description: "Set your ngrok URL in the sidebar.", variant: "destructive" });
+      toast({ title: "Colab URL required", description: "Вставьте Cloudflare URL из Colab в сайдбар.", variant: "destructive" });
       return;
     }
 

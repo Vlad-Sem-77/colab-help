@@ -107,7 +107,7 @@ export default function Home() {
   });
 
   const handlePing = () => {
-    if (!colabUrl) return toast({ title: "URL Required", description: "Please enter a Colab ngrok URL", variant: "destructive" });
+    if (!colabUrl) return toast({ title: "URL Required", description: "Please enter your Colab URL (trycloudflare.com)", variant: "destructive" });
     pingMutation.mutate({ data: { colabUrl } });
   };
 
@@ -180,7 +180,7 @@ export default function Home() {
           </div>
           <div className="flex gap-2">
             <Input 
-              placeholder="https://...ngrok-free.app" 
+              placeholder="https://xxxx.trycloudflare.com" 
               value={colabUrl} 
               onChange={e => setColabUrl(e.target.value)}
               className="font-mono text-xs bg-background h-9"

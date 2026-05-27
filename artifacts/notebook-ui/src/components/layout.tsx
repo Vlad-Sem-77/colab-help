@@ -38,14 +38,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <span>Colab Connection</span>
             </div>
             <Input
-              placeholder="https://...ngrok-free.app"
+              placeholder="https://xxxx.trycloudflare.com"
               value={colabUrl}
               onChange={(e) => setColabUrl(e.target.value)}
               className="bg-background text-xs"
               data-testid="input-colab-url"
             />
             <p className="text-[10px] text-muted-foreground leading-tight">
-              Вставьте ngrok URL из вывода ячейки Colab
+              Вставьте Cloudflare URL из вывода ячейки Colab
             </p>
           </div>
           <a href="/api/colab/notebook" download="colab_backend.ipynb">
