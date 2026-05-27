@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/notebook/"
+title = "Notebook UI"
+version = "1.0.0"
+id = "artifacts/notebook-ui"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/notebook/" ]
+localPort = 26268
+
+[services.development]
+run = "pnpm --filter @workspace/notebook-ui run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/notebook-ui", "run", "build" ]
+publicDir = "artifacts/notebook-ui/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "26268"
+BASE_PATH = "/notebook/"
