@@ -22,6 +22,27 @@ router.get("/colab/notebook", (_req, res): void => {
   res.sendFile(notebookPath);
 });
 
+router.post("/colab/execute", async (req, res): Promise<void> => {
+  const { colabUrl, code } = req.body as { colabUrl?: string; code?: string };
+  if (!colabUrl || typeof code !== "string") {
+    res.status(400).json({ status: "error", stdout: "", stderr: "colabUrl and code are required" });
+    return;
+  }
+  try {
+    const response = await fetch(`${colabUrl}/execute`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code }),
+      signal: AbortSignal.timeout(60000),
+    });
+    const data = await response.json();
+    res.json(data);
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    res.status(502).json({ status: "error", stdout: "", stderr: msg });
+  }
+});
+
 router.post("/colab/ping", async (req, res): Promise<void> => {
   const parsed = PingColabBody.safeParse(req.body);
   if (!parsed.success) {

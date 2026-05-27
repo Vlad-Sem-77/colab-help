@@ -201,7 +201,20 @@ export default function Home() {
 
         setCellResults(prev => ({ ...prev, [cell.id]: res.result || res.error }));
       } else {
-        setCellResults(prev => ({ ...prev, [cell.id]: "Regular code cell run is not hooked up to a generic execution API yet." }));
+        const source = cell.source.join("");
+        const resp = await fetch("/api/colab/execute", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ colabUrl, code: source }),
+        });
+        const data = await resp.json();
+        if (!resp.ok || data.status === "error") {
+          const errText = data.stderr || data.error || "Execution failed";
+          setCellResults(prev => ({ ...prev, [cell.id]: `❌ Error:\n${errText}` }));
+        } else {
+          const out = [data.stdout, data.stderr ? `[stderr]\n${data.stderr}` : ""].filter(Boolean).join("\n") || "(no output)";
+          setCellResults(prev => ({ ...prev, [cell.id]: out }));
+        }
       }
     } catch (err: any) {
       setCellResults(prev => ({ ...prev, [cell.id]: `Error: ${err.message || "Failed to run"}` }));
