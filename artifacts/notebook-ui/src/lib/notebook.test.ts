@@ -4,9 +4,13 @@ import test from "node:test";
 import {
   analyzeNotebook,
   answerNotebookQuestion,
+  canRunNotebookCell,
+  createCellEnabledState,
   explainNotebookCell,
   exportNotebook,
+  isCellEnabled,
   parseNotebook,
+  setCellEnabled,
 } from "./notebook.ts";
 import { buildNotebookContext } from "./notebook-context.ts";
 
@@ -81,6 +85,49 @@ test("round-trips the repository's Colab notebook metadata, cell IDs, counts, an
   const exported = JSON.parse(exportNotebook(parseNotebook(original), {}));
 
   assert.deepEqual(exported, original);
+});
+
+test("cell enablement is independent, resets on reload, and does not change exported notebook content", () => {
+  const original = {
+    cells: [
+      { cell_type: "markdown", id: "intro", source: "# Intro\n" },
+      { cell_type: "code", id: "first-code", source: ["print('first')\n"], outputs: [] },
+      { cell_type: "code", id: "second-code", source: ["print('second')\n"], outputs: [] },
+      { cell_type: "code", id: "parameters", source: "temperature = 0.7\n", outputs: [] },
+    ],
+    metadata: { kernelspec: { name: "python3" } },
+    nbformat: 4,
+    nbformat_minor: 5,
+  };
+  const notebook = parseNotebook(original);
+  const initialState = createCellEnabledState(notebook.cells);
+  const disabledState = setCellEnabled(initialState, "first-code", false);
+
+  assert.equal(isCellEnabled(disabledState, "first-code"), false);
+  assert.equal(isCellEnabled(disabledState, "second-code"), true);
+  assert.equal(isCellEnabled(initialState, "first-code"), true);
+  assert.equal(canRunNotebookCell(notebook.cells[1], disabledState), false);
+  assert.equal(canRunNotebookCell(notebook.cells[2], disabledState), true);
+  assert.equal(notebook.cells[3].type, "parameter");
+  assert.equal(canRunNotebookCell(notebook.cells[3], disabledState), true);
+  assert.equal(
+    canRunNotebookCell(notebook.cells[3], setCellEnabled(disabledState, "parameters", false)),
+    false,
+  );
+  assert.equal(canRunNotebookCell(notebook.cells[0], disabledState), false);
+  assert.deepEqual(notebook.cells.map(cell => cell.source), [
+    ["# Intro\n"],
+    ["print('first')\n"],
+    ["print('second')\n"],
+    ["temperature = 0.7\n"],
+  ]);
+
+  const reloadedState = createCellEnabledState(parseNotebook(original).cells);
+  assert.ok(notebook.cells.every(cell => isCellEnabled(reloadedState, cell.id)));
+
+  const exported = JSON.parse(exportNotebook(notebook, {}));
+  assert.deepEqual(exported, original);
+  assert.equal(JSON.stringify(exported).includes("first-code\":false"), false);
 });
 
 test("summarizes notebook structure, headings, execution state, and errors", () => {

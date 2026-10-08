@@ -17,12 +17,34 @@ export interface NotebookCell {
   original?: Record<string, any>;
 }
 
+export type CellEnabledState = Record<string, boolean>;
+
 export interface Notebook {
   cells: NotebookCell[];
   metadata?: Record<string, any>;
   nbformat?: number;
   nbformat_minor?: number;
   original?: Record<string, any>;
+}
+
+export function createCellEnabledState(cells: readonly Pick<NotebookCell, "id">[]): CellEnabledState {
+  return Object.fromEntries(cells.map(cell => [cell.id, true]));
+}
+
+export function isCellEnabled(state: CellEnabledState, cellId: string): boolean {
+  return state[cellId] !== false;
+}
+
+export function setCellEnabled(
+  state: CellEnabledState,
+  cellId: string,
+  enabled: boolean,
+): CellEnabledState {
+  return { ...state, [cellId]: enabled };
+}
+
+export function canRunNotebookCell(cell: NotebookCell, state: CellEnabledState): boolean {
+  return isCellEnabled(state, cell.id) && (cell.type === "code" || cell.type === "parameter");
 }
 
 export interface NotebookAnalysis {

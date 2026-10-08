@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Upload, Play, Download, Code, FileText, Settings2, Loader2, Monitor, Waves } from "lucide-react";
+import { Upload, Play, Download, Code, FileText, Settings2, Loader2, Monitor, Waves, SkipForward } from "lucide-react";
 import "./notebook-theme.css";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -15,9 +15,14 @@ import {
   Notebook,
   NotebookCell,
   ParamInfo,
+  CellEnabledState,
+  canRunNotebookCell,
+  createCellEnabledState,
   explainNotebookCell,
+  isCellEnabled,
   parseNotebook,
   exportNotebook,
+  setCellEnabled,
 } from "@/lib/notebook";
 import { useColabUrl } from "@/hooks/use-colab-url";
 import { useRunExperiment } from "@workspace/api-client-react";
@@ -68,7 +73,23 @@ function ThemePicker({
   );
 }
 
-function CellHeader({ index, type, executionCount, onRun, isRunning }: { index: number, type: string, executionCount?: number | null, onRun?: () => void, isRunning?: boolean }) {
+function CellHeader({
+  index,
+  type,
+  executionCount,
+  onRun,
+  isRunning,
+  isEnabled,
+  onToggle,
+}: {
+  index: number;
+  type: string;
+  executionCount?: number | null;
+  onRun?: () => void;
+  isRunning?: boolean;
+  isEnabled: boolean;
+  onToggle: (enabled: boolean) => void;
+}) {
   const displayCount = executionCount === undefined ? index + 1 : executionCount ?? " ";
 
   return (
@@ -80,13 +101,41 @@ function CellHeader({ index, type, executionCount, onRun, isRunning }: { index: 
         {type === 'markdown' && <Badge variant="secondary" className="notebook-cell-badge notebook-cell-badge-markdown"><FileText className="w-3 h-3 mr-1"/> Markdown</Badge>}
         {type === 'code' && <Badge variant="secondary" className="notebook-cell-badge notebook-cell-badge-code"><Code className="w-3 h-3 mr-1"/> Code</Badge>}
         {type === 'parameter' && <Badge variant="secondary" className="notebook-cell-badge notebook-cell-badge-parameter"><Settings2 className="w-3 h-3 mr-1"/> Parameters</Badge>}
+        {!isEnabled && (
+          <Badge
+            variant="outline"
+            className="notebook-cell-status-skipped"
+            data-testid={`status-cell-skipped-${index}`}
+          >
+            <SkipForward className="mr-1 h-3 w-3" aria-hidden="true" />
+            Отключена
+          </Badge>
+        )}
       </div>
-      {(type === 'parameter' || type === 'code') && onRun && (
-        <Button variant="ghost" size="sm" className="notebook-run-button h-7 text-xs" onClick={onRun} disabled={isRunning}>
-          {isRunning ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Play className="w-3 h-3 mr-1" />}
-          Run
-        </Button>
-      )}
+      <div className="flex flex-wrap items-center justify-end gap-3">
+        {(type === 'parameter' || type === 'code') && onRun && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="notebook-run-button h-7 text-xs"
+            onClick={onRun}
+            disabled={!isEnabled || isRunning}
+            data-testid={`button-run-cell-${index}`}
+          >
+            {isRunning ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Play className="w-3 h-3 mr-1" />}
+            Run
+          </Button>
+        )}
+        <span className="text-xs text-muted-foreground">
+          {isEnabled ? "В потоке" : "Пропускается"}
+        </span>
+        <Switch
+          checked={isEnabled}
+          onCheckedChange={onToggle}
+          aria-label={`${isEnabled ? "Отключить" : "Включить"} ячейку ${index + 1}`}
+          data-testid={`switch-cell-enabled-${index}`}
+        />
+      </div>
     </div>
   );
 }
@@ -179,7 +228,17 @@ function NotebookOutputs({ outputs, cellId }: { outputs: any[], cellId: string }
   );
 }
 
-function ParameterWidget({ param, value, onChange }: { param: ParamInfo, value: any, onChange: (val: any) => void }) {
+function ParameterWidget({
+  param,
+  value,
+  onChange,
+  disabled,
+}: {
+  param: ParamInfo;
+  value: any;
+  onChange: (val: any) => void;
+  disabled: boolean;
+}) {
   const isPrompt = param.varName.includes("prompt");
   const isTemp = param.varName === "temperature";
   const isTokens = param.varName === "max_tokens" || param.varName === "max_length";
@@ -193,6 +252,7 @@ function ParameterWidget({ param, value, onChange }: { param: ParamInfo, value: 
           value={value ?? param.defaultValue} 
           onChange={e => onChange(e.target.value)} 
           className="font-mono text-sm min-h-[100px]"
+          disabled={disabled}
         />
       </div>
     );
@@ -209,6 +269,7 @@ function ParameterWidget({ param, value, onChange }: { param: ParamInfo, value: 
           min={0} max={2} step={0.01} 
           value={[value ?? param.defaultValue]} 
           onValueChange={v => onChange(v[0])} 
+          disabled={disabled}
         />
       </div>
     );
@@ -225,6 +286,7 @@ function ParameterWidget({ param, value, onChange }: { param: ParamInfo, value: 
           min={64} max={4096} step={64} 
           value={[value ?? param.defaultValue]} 
           onValueChange={v => onChange(v[0])} 
+          disabled={disabled}
         />
       </div>
     );
@@ -237,6 +299,7 @@ function ParameterWidget({ param, value, onChange }: { param: ParamInfo, value: 
         <Switch 
           checked={value ?? param.defaultValue} 
           onCheckedChange={onChange} 
+          disabled={disabled}
         />
       </div>
     );
@@ -246,8 +309,8 @@ function ParameterWidget({ param, value, onChange }: { param: ParamInfo, value: 
     return (
       <div className="space-y-1.5">
         <label className="text-xs font-medium font-mono text-muted-foreground">{param.varName}</label>
-        <Select value={value ?? param.defaultValue} onValueChange={onChange}>
-          <SelectTrigger>
+        <Select value={value ?? param.defaultValue} onValueChange={onChange} disabled={disabled}>
+          <SelectTrigger disabled={disabled}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -268,6 +331,7 @@ function ParameterWidget({ param, value, onChange }: { param: ParamInfo, value: 
         value={value ?? param.defaultValue} 
         onChange={e => onChange(e.target.value)} 
         className="font-mono text-sm"
+        disabled={disabled}
       />
     </div>
   );
@@ -277,6 +341,7 @@ export default function Home() {
   const [theme, setTheme] = useState<NotebookTheme>(readSavedTheme);
   const [notebook, setNotebook] = useState<Notebook | null>(null);
   const [cellValues, setCellValues] = useState<Record<string, Record<string, any>>>({});
+  const [cellEnabled, setCellEnabledState] = useState<CellEnabledState>({});
   const [cellResults, setCellResults] = useState<Record<string, any>>({});
   const [runningCells, setRunningCells] = useState<Record<string, boolean>>({});
   const [notebookRevision, setNotebookRevision] = useState(0);
@@ -312,6 +377,7 @@ export default function Home() {
         const json = JSON.parse(ev.target?.result as string);
         const parsed = parseNotebook(json);
         setNotebook(parsed);
+        setCellEnabledState(createCellEnabledState(parsed.cells));
         setNotebookRevision(revision => revision + 1);
         setCellValues({});
         setCellResults({});
@@ -344,7 +410,13 @@ export default function Home() {
     }));
   };
 
+  const updateCellEnabled = (cellId: string, enabled: boolean) => {
+    setCellEnabledState(prev => setCellEnabled(prev, cellId, enabled));
+  };
+
   const handleRunCell = async (cell: NotebookCell) => {
+    if (!canRunNotebookCell(cell, cellEnabled)) return;
+
     if (!colabUrl) {
       toast({ title: "Colab URL required", description: "Вставьте Cloudflare URL из Colab в сайдбар.", variant: "destructive" });
       return;
@@ -451,6 +523,9 @@ export default function Home() {
                 <p className="notebook-eyebrow">РАБОЧАЯ ОБЛАСТЬ</p>
                 <h2>Блокнот готов</h2>
                 <p>Ячеек: {notebook.cells.length} · результат и параметры доступны ниже</p>
+                <p className="notebook-cell-toggle-note">
+                  Отключённые ячейки пропускаются при запуске. После перезагрузки все ячейки включены; переключатели не сохраняются в .ipynb.
+                </p>
               </div>
               <div className="notebook-document-actions">
                 <Input
@@ -488,7 +563,12 @@ export default function Home() {
                 if (cell.type === 'parameter') borderColor = "border-orange-500";
 
                 return (
-                  <section key={cell.id} className="notebook-cell" data-notebook-cell-type={cell.type}>
+                  <section
+                    key={cell.id}
+                    className="notebook-cell"
+                    data-notebook-cell-type={cell.type}
+                    data-cell-enabled={isCellEnabled(cellEnabled, cell.id)}
+                  >
                     <div className="flex min-w-0">
                       <div className={`notebook-cell-mark w-1 shrink-0 bg-opacity-80 ${borderColor.replace('border-', 'bg-')}`} />
                       <div className="notebook-cell-column flex-1 min-w-0">
@@ -498,6 +578,8 @@ export default function Home() {
                           executionCount={cell.execution_count}
                           onRun={() => handleRunCell(cell)}
                           isRunning={runningCells[cell.id]}
+                          isEnabled={isCellEnabled(cellEnabled, cell.id)}
+                          onToggle={(enabled) => updateCellEnabled(cell.id, enabled)}
                         />
 
                         <div className="notebook-cell-body p-4">
@@ -522,6 +604,7 @@ export default function Home() {
                                     param={p}
                                     value={cellValues[cell.id]?.[p.varName]}
                                     onChange={(val) => updateCellValue(cell.id, p.varName, val)}
+                                    disabled={!isCellEnabled(cellEnabled, cell.id)}
                                   />
                                 ))}
                               </div>
