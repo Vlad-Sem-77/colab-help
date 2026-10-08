@@ -54,6 +54,32 @@ test("uploads notebook text, parameters and saved results with the notebook help
     .toContainText("Этот текст описывает подготовку данных.");
 });
 
+test("restores opted-in cell settings after reload and lets the user reset them", async ({ page }) => {
+  await page.getByTestId("input-upload-notebook").setInputFiles(notebookFixture);
+
+  const rememberSettings = page.getByTestId("switch-remember-cell-settings");
+  const firstCodeCell = page.getByTestId("switch-cell-enabled-1");
+
+  await rememberSettings.click();
+  await expect(rememberSettings).toHaveAttribute("data-state", "checked");
+  await firstCodeCell.click();
+  await expect(firstCodeCell).toHaveAttribute("data-state", "unchecked");
+
+  await page.reload();
+  await page.getByTestId("input-upload-notebook").setInputFiles(notebookFixture);
+  await expect(rememberSettings).toHaveAttribute("data-state", "checked");
+  await expect(firstCodeCell).toHaveAttribute("data-state", "unchecked");
+
+  await page.getByTestId("button-reset-cell-settings").click();
+  await expect(rememberSettings).toHaveAttribute("data-state", "unchecked");
+  await expect(firstCodeCell).toHaveAttribute("data-state", "checked");
+
+  await page.reload();
+  await page.getByTestId("input-upload-notebook").setInputFiles(notebookFixture);
+  await expect(rememberSettings).toHaveAttribute("data-state", "unchecked");
+  await expect(firstCodeCell).toHaveAttribute("data-state", "checked");
+});
+
 test("keeps the loaded notebook within a mobile viewport", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByTestId("input-upload-notebook").setInputFiles(notebookFixture);

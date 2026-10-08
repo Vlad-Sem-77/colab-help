@@ -5,11 +5,15 @@ import {
   analyzeNotebook,
   answerNotebookQuestion,
   canRunNotebookCell,
+  clearSavedCellEnabledState,
+  createNotebookSettingsId,
   createCellEnabledState,
   explainNotebookCell,
   exportNotebook,
   isCellEnabled,
   parseNotebook,
+  readSavedCellEnabledState,
+  saveCellEnabledState,
   setCellEnabled,
 } from "./notebook.ts";
 import { buildNotebookContext } from "./notebook-context.ts";
@@ -87,7 +91,7 @@ test("round-trips the repository's Colab notebook metadata, cell IDs, counts, an
   assert.deepEqual(exported, original);
 });
 
-test("cell enablement is independent, resets on reload, and does not change exported notebook content", () => {
+test("cell enablement is independent and does not change exported notebook content", () => {
   const original = {
     cells: [
       { cell_type: "markdown", id: "intro", source: "# Intro\n" },
@@ -128,6 +132,59 @@ test("cell enablement is independent, resets on reload, and does not change expo
   const exported = JSON.parse(exportNotebook(notebook, {}));
   assert.deepEqual(exported, original);
   assert.equal(JSON.stringify(exported).includes("first-code\":false"), false);
+});
+
+test("cell enablement preferences are isolated by notebook, restored across loads, and resettable", async () => {
+  const storage = new Map<string, string>();
+  const localStorage = {
+    getItem: (key: string) => storage.get(key) ?? null,
+    setItem: (key: string, value: string) => storage.set(key, value),
+    removeItem: (key: string) => storage.delete(key),
+  };
+  const firstNotebook = parseNotebook({
+    cells: [
+      { cell_type: "code", id: "first", source: "print('first')" },
+      { cell_type: "code", id: "second", source: "print('second')" },
+    ],
+  });
+  const secondNotebook = parseNotebook({
+    cells: [{ cell_type: "code", id: "first", source: "print('different')" }],
+  });
+  const firstId = await createNotebookSettingsId(firstNotebook);
+  const secondId = await createNotebookSettingsId(secondNotebook);
+  const firstState = setCellEnabled(createCellEnabledState(firstNotebook.cells), "first", false);
+
+  assert.notEqual(firstId, secondId);
+  assert.equal(saveCellEnabledState(localStorage, firstId, firstState), true);
+  assert.deepEqual(
+    readSavedCellEnabledState(localStorage, firstId, parseNotebook(firstNotebook.original).cells),
+    firstState,
+  );
+  assert.deepEqual(
+    readSavedCellEnabledState(localStorage, secondId, secondNotebook.cells),
+    null,
+  );
+  assert.equal(clearSavedCellEnabledState(localStorage, firstId), true);
+  assert.deepEqual(
+    readSavedCellEnabledState(localStorage, firstId, firstNotebook.cells),
+    null,
+  );
+});
+
+test("notebook settings IDs do not depend on JSON object key order", async () => {
+  const first = parseNotebook({
+    metadata: { owner: "reader", language: "python" },
+    cells: [{ cell_type: "code", id: "cell-1", source: "print(1)" }],
+  });
+  const reordered = parseNotebook({
+    cells: [{ source: "print(1)", id: "cell-1", cell_type: "code" }],
+    metadata: { language: "python", owner: "reader" },
+  });
+
+  assert.equal(
+    await createNotebookSettingsId(first),
+    await createNotebookSettingsId(reordered),
+  );
 });
 
 test("summarizes notebook structure, headings, execution state, and errors", () => {

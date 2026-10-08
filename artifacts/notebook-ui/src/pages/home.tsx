@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Upload, Play, Download, Code, FileText, Settings2, Loader2, Monitor, Waves, SkipForward } from "lucide-react";
+import { Upload, Play, Download, Code, FileText, Settings2, Loader2, Monitor, Waves, SkipForward, RotateCcw } from "lucide-react";
 import "./notebook-theme.css";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -17,11 +17,15 @@ import {
   ParamInfo,
   CellEnabledState,
   canRunNotebookCell,
+  clearSavedCellEnabledState,
+  createNotebookSettingsId,
   createCellEnabledState,
   explainNotebookCell,
   isCellEnabled,
   parseNotebook,
   exportNotebook,
+  readSavedCellEnabledState,
+  saveCellEnabledState,
   setCellEnabled,
 } from "@/lib/notebook";
 import { useColabUrl } from "@/hooks/use-colab-url";
@@ -39,6 +43,14 @@ function readSavedTheme(): NotebookTheme {
       : "light-waves";
   } catch {
     return "light-waves";
+  }
+}
+
+function getLocalStorage(): Storage | null {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
   }
 }
 
@@ -347,6 +359,8 @@ export default function Home() {
   const [notebook, setNotebook] = useState<Notebook | null>(null);
   const [cellValues, setCellValues] = useState<Record<string, Record<string, any>>>({});
   const [cellEnabled, setCellEnabledState] = useState<CellEnabledState>({});
+  const [notebookSettingsId, setNotebookSettingsId] = useState<string | null>(null);
+  const [rememberCellSettings, setRememberCellSettings] = useState(false);
   const [cellResults, setCellResults] = useState<Record<string, any>>({});
   const [runningCells, setRunningCells] = useState<Record<string, boolean>>({});
   const [notebookRevision, setNotebookRevision] = useState(0);
@@ -377,12 +391,20 @@ export default function Home() {
 
     const input = e.currentTarget;
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       try {
         const json = JSON.parse(ev.target?.result as string);
         const parsed = parseNotebook(json);
+        const settingsId = await createNotebookSettingsId(parsed);
+        const storage = getLocalStorage();
+        const savedState = storage
+          ? readSavedCellEnabledState(storage, settingsId, parsed.cells)
+          : null;
+
         setNotebook(parsed);
-        setCellEnabledState(createCellEnabledState(parsed.cells));
+        setNotebookSettingsId(settingsId);
+        setCellEnabledState(savedState ?? createCellEnabledState(parsed.cells));
+        setRememberCellSettings(savedState !== null);
         setNotebookRevision(revision => revision + 1);
         setCellValues({});
         setCellResults({});
@@ -416,7 +438,61 @@ export default function Home() {
   };
 
   const updateCellEnabled = (cellId: string, enabled: boolean) => {
-    setCellEnabledState(prev => setCellEnabled(prev, cellId, enabled));
+    const updatedState = setCellEnabled(cellEnabled, cellId, enabled);
+    setCellEnabledState(updatedState);
+    if (rememberCellSettings && notebookSettingsId) {
+      const storage = getLocalStorage();
+      if (!storage || !saveCellEnabledState(storage, notebookSettingsId, updatedState)) {
+        toast({
+          title: "Не удалось сохранить настройки",
+          description: "Изменение применено, но не сохранено для следующего посещения.",
+          variant: "destructive",
+        });
+      }
+    }
+  };
+
+  const updateRememberCellSettings = (remember: boolean) => {
+    if (!notebookSettingsId) return;
+    const storage = getLocalStorage();
+    if (!storage) {
+      toast({
+        title: "Хранилище браузера недоступно",
+        description: "Настройки ячеек можно сохранять только при доступном хранилище браузера.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const updated = remember
+      ? saveCellEnabledState(storage, notebookSettingsId, cellEnabled)
+      : clearSavedCellEnabledState(storage, notebookSettingsId);
+    if (!updated) {
+      toast({
+        title: "Не удалось изменить настройки",
+        description: "Проверьте доступность хранилища браузера и попробуйте ещё раз.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setRememberCellSettings(remember);
+  };
+
+  const resetCellSettings = () => {
+    if (!notebook || !notebookSettingsId) return;
+    const storage = getLocalStorage();
+    if (!storage || !clearSavedCellEnabledState(storage, notebookSettingsId)) {
+      toast({
+        title: "Не удалось сбросить настройки",
+        description: "Настройки остались сохранены в хранилище браузера.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setCellEnabledState(createCellEnabledState(notebook.cells));
+    setRememberCellSettings(false);
+    toast({ title: "Настройки ячеек сброшены" });
   };
 
   const handleRunCell = async (cell: NotebookCell) => {
@@ -529,8 +605,28 @@ export default function Home() {
                 <h2>Блокнот готов</h2>
                 <p>Ячеек: {notebook.cells.length} · результат и параметры доступны ниже</p>
                 <p className="notebook-cell-toggle-note">
-                  Отключённые ячейки пропускаются при запуске. После перезагрузки все ячейки включены; переключатели не сохраняются в .ipynb.
+                  Отключённые ячейки пропускаются при запуске. При желании сохраняйте их состояние отдельно от .ipynb.
                 </p>
+                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={rememberCellSettings}
+                      onCheckedChange={updateRememberCellSettings}
+                      aria-label="Сохранять настройки ячеек этого блокнота"
+                      data-testid="switch-remember-cell-settings"
+                    />
+                    <span className="text-sm">Запоминать переключатели в этом браузере</span>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={resetCellSettings}
+                    data-testid="button-reset-cell-settings"
+                  >
+                    <RotateCcw className="mr-2 h-4 w-4" aria-hidden="true" />
+                    Сбросить настройки ячеек
+                  </Button>
+                </div>
               </div>
               <div className="notebook-document-actions">
                 <Input

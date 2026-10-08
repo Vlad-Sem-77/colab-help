@@ -19,6 +19,33 @@ export interface NotebookCell {
 
 export type CellEnabledState = Record<string, boolean>;
 
+type CellEnabledStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">;
+
+function sortObjectKeys(value: any): any {
+  if (Array.isArray(value)) return value.map(sortObjectKeys);
+  if (!value || typeof value !== "object") return value;
+
+  return Object.fromEntries(
+    Object.keys(value)
+      .sort()
+      .map(key => [key, sortObjectKeys(value[key])]),
+  );
+}
+
+export async function createNotebookSettingsId(notebook: Notebook): Promise<string> {
+  const canonicalNotebook = JSON.stringify(sortObjectKeys(notebook.original ?? notebook));
+  const digest = await globalThis.crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(canonicalNotebook),
+  );
+
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function cellEnabledStorageKey(notebookId: string): string {
+  return `notebook-ui-cell-settings:v1:${notebookId}`;
+}
+
 export interface Notebook {
   cells: NotebookCell[];
   metadata?: Record<string, any>;
@@ -29,6 +56,51 @@ export interface Notebook {
 
 export function createCellEnabledState(cells: readonly Pick<NotebookCell, "id">[]): CellEnabledState {
   return Object.fromEntries(cells.map(cell => [cell.id, true]));
+}
+
+export function readSavedCellEnabledState(
+  storage: CellEnabledStorage,
+  notebookId: string,
+  cells: readonly Pick<NotebookCell, "id">[],
+): CellEnabledState | null {
+  try {
+    const saved = JSON.parse(storage.getItem(cellEnabledStorageKey(notebookId)) ?? "null");
+    if (!saved || saved.version !== 1 || !saved.enabled || typeof saved.enabled !== "object") {
+      return null;
+    }
+
+    const state = createCellEnabledState(cells);
+    for (const cell of cells) {
+      if (typeof saved.enabled[cell.id] === "boolean") {
+        state[cell.id] = saved.enabled[cell.id];
+      }
+    }
+    return state;
+  } catch {
+    return null;
+  }
+}
+
+export function saveCellEnabledState(
+  storage: CellEnabledStorage,
+  notebookId: string,
+  state: CellEnabledState,
+): boolean {
+  try {
+    storage.setItem(cellEnabledStorageKey(notebookId), JSON.stringify({ version: 1, enabled: state }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function clearSavedCellEnabledState(storage: CellEnabledStorage, notebookId: string): boolean {
+  try {
+    storage.removeItem(cellEnabledStorageKey(notebookId));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function isCellEnabled(state: CellEnabledState, cellId: string): boolean {
