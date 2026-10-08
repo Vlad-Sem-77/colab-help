@@ -414,6 +414,10 @@ html[data-notebook-theme="light-waves"] .notebook-reader-panels [data-testid="ca
   gap: 16px;
 }
 
+.notebook-cell {
+  scroll-margin-block-start: 1rem;
+}
+
 html[data-notebook-theme="light-waves"] .notebook-cell-list::before {
   position: absolute;
   z-index: 0;

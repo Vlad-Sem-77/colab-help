@@ -63,6 +63,16 @@ export function NotebookReader({ notebook, notebookContext, colabUrl }: Notebook
   const [allowColabAi, setAllowColabAi] = useState(false);
   const [isPending, setIsPending] = useState(false);
   const analysis = useMemo(() => analyzeNotebook(notebook), [notebook]);
+  const sectionCellIndexes = useMemo(() => {
+    const indexes: number[] = [];
+    notebook.cells.forEach((cell, cellIndex) => {
+      if (cell.type !== "markdown") return;
+      for (const match of cell.source.join("").matchAll(/^\s{0,3}#{1,6}\s+(.+)$/gm)) {
+        if (match[1].trim()) indexes.push(cellIndex);
+      }
+    });
+    return indexes;
+  }, [notebook]);
   const hasColabConnection = Boolean(colabUrl?.trim());
 
   const ask = async (rawQuestion: string) => {
@@ -191,7 +201,23 @@ export function NotebookReader({ notebook, notebookContext, colabUrl }: Notebook
               <ol className="space-y-1 border-l pl-3 text-sm text-muted-foreground">
                 {analysis.sections.map((section, index) => (
                   <li key={`${section}-${index}`} data-testid={`text-notebook-section-${index}`}>
-                    {section}
+                    {sectionCellIndexes[index] !== undefined ? (
+                      <a
+                        href={`#notebook-cell-${sectionCellIndexes[index]}`}
+                        className="font-medium underline decoration-dotted underline-offset-4 hover:text-primary focus-visible:rounded-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+                        aria-label={`Перейти к ячейке ${sectionCellIndexes[index] + 1}: ${section}`}
+                        data-testid={`link-notebook-section-${index}`}
+                      >
+                        {section}
+                      </a>
+                    ) : (
+                      <span
+                        title="Ячейка с этим заголовком не найдена"
+                        data-testid={`text-notebook-unlinked-section-${index}`}
+                      >
+                        {section} <span className="text-xs">(ячейка не найдена)</span>
+                      </span>
+                    )}
                   </li>
                 ))}
               </ol>

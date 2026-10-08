@@ -565,6 +565,7 @@ export default function Home() {
                 return (
                   <section
                     key={cell.id}
+                    id={`notebook-cell-${index}`}
                     className="notebook-cell"
                     data-notebook-cell-type={cell.type}
                     data-cell-enabled={isCellEnabled(cellEnabled, cell.id)}
