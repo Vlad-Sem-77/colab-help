@@ -561,3 +561,22 @@ test("keeps the loaded notebook within a mobile viewport", async ({ page }) => {
   expect(await sidebarIsAboveNotebook()).toBe(true);
   expect(await documentActionsFit()).toBe(true);
 });
+
+test("keeps the uploaded notebook after History navigation, screen rotation, and reload", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByTestId("input-upload-notebook").setInputFiles(notebookFixture);
+  await expect(page.getByTestId("status-simulation-mode")).toBeVisible();
+
+  await page.getByRole("link", { name: "History" }).click();
+  await expect(page.getByRole("heading", { name: "Run History" })).toBeVisible();
+  await page.getByRole("link", { name: "Notebook" }).click();
+  await expect(page.getByTestId("status-simulation-mode")).toBeVisible();
+  await expect(page.getByTestId("card-notebook-upload")).toHaveCount(0);
+
+  await page.setViewportSize({ width: 844, height: 390 });
+  await expect(page.getByTestId("status-simulation-mode")).toBeVisible();
+  await page.reload();
+
+  await expect(page.getByTestId("status-simulation-mode")).toBeVisible();
+  await expect(page.getByTestId("card-notebook-upload")).toHaveCount(0);
+});

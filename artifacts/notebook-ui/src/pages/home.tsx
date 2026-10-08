@@ -40,6 +40,7 @@ import {
 } from "@/lib/notebook";
 import { NotebookReader } from "@/components/notebook-reader";
 import { useNotebookTheme } from "@/components/layout";
+import { useNotebookSession } from "@/components/notebook-session";
 
 type CellRunStatus = "running" | "simulated";
 type BatchRunState =
@@ -354,7 +355,7 @@ function ParameterWidget({
 
 export default function Home() {
   const { theme } = useNotebookTheme();
-  const [notebook, setNotebook] = useState<Notebook | null>(null);
+  const { notebook, isRestoringNotebook, restoreError, replaceNotebook } = useNotebookSession();
   const [cellValues, setCellValues] = useState<Record<string, Record<string, any>>>({});
   const [cellEnabled, setCellEnabledState] = useState<CellEnabledState>({});
   const [notebookSettingsId, setNotebookSettingsId] = useState<string | null>(null);
@@ -390,6 +391,15 @@ export default function Home() {
   const aiReady = Boolean(selectedAiProvider?.hasSessionKey && activeAiModelId && aiModelIsAvailable);
 
   const { toast } = useToast();
+  useEffect(() => {
+    if (!restoreError) return;
+    toast({
+      title: "Не удалось восстановить блокнот",
+      description: restoreError,
+      variant: "destructive",
+    });
+  }, [restoreError, toast]);
+
   const handleAiSettingsChange = (nextSettings: AiSettings) => {
     if (nextSettings.providerId !== aiSettings.providerId) {
       setAllowOnlineAi(false);
@@ -457,7 +467,7 @@ export default function Home() {
           ? readSavedCellEnabledState(storage, settingsId, parsed.cells)
           : null;
 
-        setNotebook(parsed);
+        const savedLocally = await replaceNotebook(parsed);
         setNotebookSettingsId(settingsId);
         setCellEnabledState(savedState ?? createCellEnabledState(parsed.cells));
         setRememberCellSettings(savedState !== null);
@@ -466,6 +476,13 @@ export default function Home() {
         setCellResults({});
         setCellRunStatuses({});
         setBatchRunState(null);
+        if (!savedLocally) {
+          toast({
+            title: "Блокнот открыт, но не сохранён",
+            description: "В этой вкладке он останется доступен, но после перезагрузки его может потребоваться загрузить снова.",
+            variant: "destructive",
+          });
+        }
       } catch (err) {
         toast({
           title: "Не удалось прочитать блокнот",
@@ -638,7 +655,11 @@ export default function Home() {
   return (
     <div className="notebook-page" data-notebook-theme={theme} data-testid="page-notebook">
       <div className="notebook-page-inner">
-        {!notebook ? (
+        {isRestoringNotebook ? (
+          <section className="notebook-upload-card" role="status" data-testid="status-restore-notebook">
+            <p>Восстанавливаю блокнот…</p>
+          </section>
+        ) : !notebook ? (
           <section className="notebook-upload-card" data-testid="card-notebook-upload">
             <div className="notebook-upload-icon"><Upload aria-hidden="true" /></div>
             <p className="notebook-eyebrow">ВАШ РАБОЧИЙ БЛОКНОТ</p>
