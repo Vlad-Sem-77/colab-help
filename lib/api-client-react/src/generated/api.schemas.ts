@@ -93,6 +93,11 @@ export interface NotebookAnalysisResult {
   answer: string;
   /** @nullable */
   model?: string | null;
+  /**
+     * Zero-based cell indexes cited by the model and present in the supplied notebook context
+     * @items.minimum 0
+     */
+  sources?: number[];
 }
 
 export interface ModelCard {

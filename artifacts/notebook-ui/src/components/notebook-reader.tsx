@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { BookOpen, MessageCircle, Send } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Card,
   CardContent,
@@ -18,11 +19,22 @@ import {
 
 interface NotebookReaderProps {
   notebook: Notebook;
+  notebookContext: string;
+  colabUrl: string | null;
 }
 
 interface ChatMessage {
   role: "user" | "assistant";
   text: string;
+  sources?: number[];
+  answerMode?: "local" | "ai" | "fallback";
+}
+
+interface NotebookAnalysisResult {
+  answer?: unknown;
+  model?: unknown;
+  sources?: unknown;
+  error?: unknown;
 }
 
 const suggestedQuestions = [
@@ -31,21 +43,96 @@ const suggestedQuestions = [
   "Что происходит в ячейке 1?",
 ];
 
-export function NotebookReader({ notebook }: NotebookReaderProps) {
+const MAX_QUESTION_LENGTH = 12_000;
+
+function composeQuestion(question: string, messages: ChatMessage[]) {
+  const previousMessages = messages
+    .slice(-8)
+    .map((message) => `${message.role === "user" ? "Пользователь" : "Ассистент"}: ${message.text.slice(0, 900)}`)
+    .join("\n");
+  const currentQuestion = `Новый вопрос: ${question}`;
+  const conversation = previousMessages
+    ? `Предыдущий диалог:\n${previousMessages}\n\n${currentQuestion}`
+    : currentQuestion;
+  return conversation.slice(-MAX_QUESTION_LENGTH);
+}
+
+export function NotebookReader({ notebook, notebookContext, colabUrl }: NotebookReaderProps) {
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [allowColabAi, setAllowColabAi] = useState(false);
+  const [isPending, setIsPending] = useState(false);
   const analysis = useMemo(() => analyzeNotebook(notebook), [notebook]);
+  const hasColabConnection = Boolean(colabUrl?.trim());
 
-  const ask = (rawQuestion: string) => {
+  const ask = async (rawQuestion: string) => {
     const trimmedQuestion = rawQuestion.trim();
-    if (!trimmedQuestion) return;
-    const answer = answerNotebookQuestion(notebook, trimmedQuestion);
-    setMessages(current => [
-      ...current,
-      { role: "user", text: trimmedQuestion },
-      { role: "assistant", text: answer.text },
-    ]);
+    if (!trimmedQuestion || isPending) return;
+
+    const localAnswer = answerNotebookQuestion(notebook, trimmedQuestion);
     setQuestion("");
+    setMessages((current) => [...current, { role: "user", text: trimmedQuestion }]);
+
+    if (!allowColabAi || !colabUrl?.trim()) {
+      setMessages((current) => [
+        ...current,
+        { role: "assistant", text: localAnswer.text, sources: localAnswer.sources, answerMode: "local" },
+      ]);
+      return;
+    }
+
+    setIsPending(true);
+    try {
+      const response = await fetch("/api/colab/analyze-notebook", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          colabUrl,
+          notebookContext,
+          question: composeQuestion(trimmedQuestion, messages),
+        }),
+        signal: AbortSignal.timeout(90_000),
+      });
+      const result = await response.json() as NotebookAnalysisResult;
+      if (!response.ok) {
+        throw new Error(
+          typeof result.error === "string" && result.error.trim()
+            ? result.error
+            : `Сервер вернул HTTP ${response.status}.`,
+        );
+      }
+      if (typeof result.answer !== "string" || !result.answer.trim()) {
+        throw new Error("Модель не вернула текст ответа.");
+      }
+      const sources = Array.isArray(result.sources)
+        ? result.sources.filter((source): source is number => Number.isInteger(source) && source >= 0)
+        : [];
+      if (sources.length === 0) {
+        throw new Error("Ответ модели не содержит ссылок на ячейки.");
+      }
+
+      setMessages((current) => [
+        ...current,
+        {
+          role: "assistant",
+          text: result.answer as string,
+          sources,
+          answerMode: "ai",
+        },
+      ]);
+    } catch {
+      setMessages((current) => [
+        ...current,
+        {
+          role: "assistant",
+          text: `AI сейчас недоступен; ответил локальный поиск.\n\n${localAnswer.text}`,
+          sources: localAnswer.sources,
+          answerMode: "fallback",
+        },
+      ]);
+    } finally {
+      setIsPending(false);
+    }
   };
 
   const stats = [
@@ -124,10 +211,31 @@ export function NotebookReader({ notebook }: NotebookReaderProps) {
             Спросить о ноутбуке
           </CardTitle>
           <CardDescription>
-            Ответы содержат найденные фрагменты ячеек и сохранённые результаты
+            Ответы учитывают код, текст и сохранённые результаты ячеек
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="rounded-md border bg-muted/20 p-3">
+            <div className="flex items-start gap-2.5 text-sm">
+              <Checkbox
+                id="notebook-ai-consent"
+                checked={allowColabAi}
+                onCheckedChange={(checked) => setAllowColabAi(checked === true)}
+                disabled={!hasColabConnection || isPending}
+                aria-label="Разрешить отправку содержимого ноутбука в подключённую AI-модель"
+                data-testid="checkbox-notebook-ai-consent"
+              />
+              <label htmlFor="notebook-ai-consent" className="cursor-pointer font-medium leading-5">
+                Использовать AI через подключённый Colab
+              </label>
+            </div>
+            <p className="mt-2 pl-6 text-xs leading-5 text-muted-foreground">
+              {hasColabConnection
+                ? "При включении вопрос, содержимое ячеек и текстовые результаты отправляются через ваш Colab-сервер в настроенную там модель OpenRouter. Условия хранения данных зависят от этого провайдера. Ячейки ноутбука не запускаются."
+                : "Подключите Colab, чтобы включить AI. Без подключения вопросы обрабатываются только локально."}
+            </p>
+          </div>
+
           <div
             className="max-h-80 space-y-3 overflow-y-auto rounded-md border bg-muted/20 p-3"
             aria-live="polite"
@@ -135,7 +243,7 @@ export function NotebookReader({ notebook }: NotebookReaderProps) {
           >
             {messages.length === 0 ? (
               <p className="text-sm text-muted-foreground">
-                Задайте вопрос о переменной, библиотеке, разделе или номере ячейки.
+                Задайте вопрос о назначении ноутбука, его коде или полученных результатах.
               </p>
             ) : messages.map((message, index) => (
               <div
@@ -147,8 +255,19 @@ export function NotebookReader({ notebook }: NotebookReaderProps) {
                   {message.role === "user" ? "Вы" : "По содержимому ноутбука"}
                 </div>
                 <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">{message.text}</p>
+                {message.role === "assistant" && message.sources && message.sources.length > 0 && (
+                  <p className="mt-2 border-t pt-2 text-xs text-muted-foreground" data-testid={`text-notebook-sources-${index}`}>
+                    Источники: ячейки {message.sources.map((source) => source + 1).join(", ")}
+                    {message.answerMode === "ai" ? " · AI" : message.answerMode === "fallback" ? " · локальный ответ" : " · локальный поиск"}
+                  </p>
+                )}
               </div>
             ))}
+            {isPending && (
+              <p className="text-sm text-muted-foreground" role="status" data-testid="status-notebook-ai-pending">
+                AI изучает ячейки и сохранённые результаты…
+              </p>
+            )}
           </div>
 
           {messages.length === 0 && (
@@ -161,6 +280,7 @@ export function NotebookReader({ notebook }: NotebookReaderProps) {
                   variant="outline"
                   className="h-auto whitespace-normal py-1.5 text-left"
                   onClick={() => ask(suggestion)}
+                  disabled={isPending}
                   data-testid={`button-suggested-question-${suggestion.slice(0, 12).replaceAll(" ", "-")}`}
                 >
                   {suggestion}
@@ -176,26 +296,27 @@ export function NotebookReader({ notebook }: NotebookReaderProps) {
               onKeyDown={event => {
                 if (event.key === "Enter" && !event.shiftKey) {
                   event.preventDefault();
-                  ask(question);
+                  void ask(question);
                 }
               }}
               placeholder="Например: где загружаются данные?"
               className="min-h-11 resize-y"
+              disabled={isPending}
               aria-label="Вопрос о ноутбуке"
               data-testid="input-notebook-question"
             />
             <Button
               type="button"
-              onClick={() => ask(question)}
-              disabled={!question.trim()}
+              onClick={() => void ask(question)}
+              disabled={!question.trim() || isPending}
               aria-label="Отправить вопрос"
               data-testid="button-send-notebook-question"
             >
-              <Send className="h-4 w-4" />
+              {isPending ? <span className="text-xs">…</span> : <Send className="h-4 w-4" />}
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Enter — отправить, Shift+Enter — новая строка. Если совпадений нет, помощник сообщит об этом, а не станет угадывать.
+            Enter — отправить, Shift+Enter — новая строка. AI-режим выключен, пока вы не разрешите передачу содержимого ноутбука.
           </p>
         </CardContent>
       </Card>

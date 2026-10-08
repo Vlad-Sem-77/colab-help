@@ -404,7 +404,12 @@ export default function Home() {
         </div>
       </div>
 
-      <NotebookReader key={notebookRevision} notebook={notebook} />
+      <NotebookReader
+        key={notebookRevision}
+        notebook={notebook}
+        notebookContext={notebookContext}
+        colabUrl={colabUrl || null}
+      />
 
       <div className="space-y-4">
         {notebook.cells.map((cell, index) => {

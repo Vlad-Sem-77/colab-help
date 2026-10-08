@@ -123,9 +123,14 @@ export const AnalyzeNotebookBody = zod.object({
   "question": zod.string().min(1).max(analyzeNotebookBodyQuestionMax)
 })
 
+export const analyzeNotebookResponseSourcesItemMin = 0;
+
+
+
 export const AnalyzeNotebookResponse = zod.object({
   "answer": zod.string(),
-  "model": zod.string().nullish()
+  "model": zod.string().nullish(),
+  "sources": zod.array(zod.number().int().min(analyzeNotebookResponseSourcesItemMin)).optional().describe('Zero-based cell indexes cited by the model and present in the supplied notebook context')
 })
 
 

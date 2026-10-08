@@ -278,6 +278,12 @@ components:
           type: string
         model:
           type: ["string", "null"]
+        sources:
+          type: array
+          description: Zero-based cell indexes cited by the model and present in the supplied notebook context
+          items:
+            type: integer
+            minimum: 0
 
     ModelCard:
       type: object
