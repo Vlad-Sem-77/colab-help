@@ -53,12 +53,13 @@ export function NotebookSessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const replaceNotebook = useCallback(async (nextNotebook: Notebook) => {
-    setNotebook(nextNotebook);
     try {
       await saveCurrentNotebook(nextNotebook.original ?? nextNotebook);
+      setNotebook(nextNotebook);
       setRestoreError(null);
       return true;
     } catch {
+      setNotebook(nextNotebook);
       return false;
     }
   }, []);

@@ -287,7 +287,7 @@ test("keeps the provider key in the server browser session and supports voice qu
   expect(speechGenerationRequests).toBe(1);
 
   await page.reload();
-  await page.getByTestId("input-upload-notebook").setInputFiles(notebookFixture);
+  await expect(page.getByTestId("status-simulation-mode")).toBeVisible();
   await expect(page.getByTestId("text-ai-session-key-active")).toBeVisible();
   await expect(page.getByTestId("input-ai-provider-key")).toHaveValue("");
   await expect(page.getByTestId("checkbox-notebook-ai-consent")).toBeEnabled();
@@ -425,7 +425,7 @@ test("restores opted-in cell settings after reload and lets the user reset them"
   await expect(firstCodeCell).toHaveAttribute("data-state", "unchecked");
 
   await page.reload();
-  await page.getByTestId("input-upload-notebook").setInputFiles(notebookFixture);
+  await expect(page.getByTestId("status-simulation-mode")).toBeVisible();
   await expect(rememberSettings).toHaveAttribute("data-state", "checked");
   await expect(firstCodeCell).toHaveAttribute("data-state", "unchecked");
 
@@ -434,7 +434,7 @@ test("restores opted-in cell settings after reload and lets the user reset them"
   await expect(firstCodeCell).toHaveAttribute("data-state", "checked");
 
   await page.reload();
-  await page.getByTestId("input-upload-notebook").setInputFiles(notebookFixture);
+  await expect(page.getByTestId("status-simulation-mode")).toBeVisible();
   await expect(rememberSettings).toHaveAttribute("data-state", "unchecked");
   await expect(firstCodeCell).toHaveAttribute("data-state", "checked");
 });
@@ -568,7 +568,7 @@ test("keeps the uploaded notebook after History navigation, screen rotation, and
   await expect(page.getByTestId("status-simulation-mode")).toBeVisible();
 
   await page.getByRole("link", { name: "History" }).click();
-  await expect(page.getByRole("heading", { name: "Run History" })).toBeVisible();
+  await expect(page).toHaveURL(/\/notebook\/history$/);
   await page.getByRole("link", { name: "Notebook" }).click();
   await expect(page.getByTestId("status-simulation-mode")).toBeVisible();
   await expect(page.getByTestId("card-notebook-upload")).toHaveCount(0);

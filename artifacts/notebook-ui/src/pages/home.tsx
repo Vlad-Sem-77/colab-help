@@ -400,6 +400,34 @@ export default function Home() {
     });
   }, [restoreError, toast]);
 
+  useEffect(() => {
+    if (!notebook || notebookSettingsId) return;
+
+    let active = true;
+    void createNotebookSettingsId(notebook).then(settingsId => {
+      if (!active) return;
+      const storage = getLocalStorage();
+      const savedState = storage
+        ? readSavedCellEnabledState(storage, settingsId, notebook.cells)
+        : null;
+      setNotebookSettingsId(settingsId);
+      setCellEnabledState(savedState ?? createCellEnabledState(notebook.cells));
+      setRememberCellSettings(savedState !== null);
+    }).catch(error => {
+      if (active) {
+        toast({
+          title: "Не удалось восстановить настройки ячеек",
+          description: error instanceof Error ? error.message : "Попробуйте перезагрузить блокнот.",
+          variant: "destructive",
+        });
+      }
+    });
+
+    return () => {
+      active = false;
+    };
+  }, [notebook, notebookSettingsId, toast]);
+
   const handleAiSettingsChange = (nextSettings: AiSettings) => {
     if (nextSettings.providerId !== aiSettings.providerId) {
       setAllowOnlineAi(false);
