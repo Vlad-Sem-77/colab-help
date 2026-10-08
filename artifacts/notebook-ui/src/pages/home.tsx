@@ -12,11 +12,15 @@ import { Notebook, NotebookCell, ParamInfo, parseNotebook, exportNotebook } from
 import { useColabUrl } from "@/hooks/use-colab-url";
 import { useRunExperiment } from "@workspace/api-client-react";
 
-function CellHeader({ index, type, onRun, isRunning }: { index: number, type: string, onRun?: () => void, isRunning?: boolean }) {
+function CellHeader({ index, type, executionCount, onRun, isRunning }: { index: number, type: string, executionCount?: number | null, onRun?: () => void, isRunning?: boolean }) {
+  const displayCount = executionCount === undefined ? index + 1 : executionCount ?? " ";
+
   return (
     <div className="flex items-center justify-between py-2 px-4 bg-muted/50 border-b border-border">
       <div className="flex items-center gap-3">
-        <span className="text-xs font-mono text-muted-foreground">[{index + 1}]</span>
+        <span className="text-xs font-mono text-muted-foreground" data-testid={`text-cell-execution-count-${index}`}>
+          [{displayCount}]
+        </span>
         {type === 'markdown' && <Badge variant="secondary" className="bg-gray-800 text-gray-300"><FileText className="w-3 h-3 mr-1"/> Markdown</Badge>}
         {type === 'code' && <Badge variant="secondary" className="bg-blue-950 text-blue-300"><Code className="w-3 h-3 mr-1"/> Code</Badge>}
         {type === 'parameter' && <Badge variant="secondary" className="bg-orange-950 text-orange-300"><Settings2 className="w-3 h-3 mr-1"/> Parameters</Badge>}
@@ -27,6 +31,94 @@ function CellHeader({ index, type, onRun, isRunning }: { index: number, type: st
           Run
         </Button>
       )}
+    </div>
+  );
+}
+
+function outputText(value: any): string {
+  if (Array.isArray(value)) return value.join("");
+  if (typeof value === "string") return value;
+  return JSON.stringify(value, null, 2) ?? String(value);
+}
+
+function NotebookOutput({ output, cellId, index }: { output: any, cellId: string, index: number }) {
+  if (output?.output_type === "stream") {
+    return (
+      <pre className="text-sm font-mono whitespace-pre-wrap" data-testid={`text-cell-output-${cellId}-${index}`}>
+        {outputText(output.text)}
+      </pre>
+    );
+  }
+
+  if (output?.output_type === "error") {
+    const traceback = Array.isArray(output.traceback) ? output.traceback.join("\n") : "";
+    const message = [output.ename, output.evalue].filter(Boolean).join(": ");
+    return (
+      <pre className="text-sm font-mono text-red-400 whitespace-pre-wrap" data-testid={`text-cell-error-${cellId}-${index}`}>
+        {traceback || message || outputText(output)}
+      </pre>
+    );
+  }
+
+  const data = output?.data;
+  if (data && typeof data === "object") {
+    if (typeof data["text/html"] !== "undefined") {
+      return (
+        <iframe
+          title={`Saved notebook output ${index + 1}`}
+          sandbox=""
+          srcDoc={outputText(data["text/html"])}
+          className="h-64 w-full rounded border bg-white"
+          data-testid={`frame-cell-output-${cellId}-${index}`}
+        />
+      );
+    }
+
+    const imageMime = ["image/png", "image/jpeg", "image/gif", "image/webp"]
+      .find(mime => typeof data[mime] === "string");
+    if (imageMime) {
+      return (
+        <img
+          src={`data:${imageMime};base64,${data[imageMime]}`}
+          alt={`Saved output ${index + 1}`}
+          className="max-h-96 max-w-full object-contain"
+          data-testid={`img-cell-output-${cellId}-${index}`}
+        />
+      );
+    }
+
+    const textMime = ["text/plain", "text/markdown", "application/json"]
+      .find(mime => data[mime] !== undefined);
+    if (textMime) {
+      return (
+        <pre className="text-sm font-mono whitespace-pre-wrap" data-testid={`text-cell-output-${cellId}-${index}`}>
+          {outputText(data[textMime])}
+        </pre>
+      );
+    }
+
+    return (
+      <pre className="text-sm font-mono whitespace-pre-wrap" data-testid={`text-cell-output-${cellId}-${index}`}>
+        {outputText(data)}
+      </pre>
+    );
+  }
+
+  return (
+    <pre className="text-sm font-mono whitespace-pre-wrap" data-testid={`text-cell-output-${cellId}-${index}`}>
+      {outputText(output)}
+    </pre>
+  );
+}
+
+function NotebookOutputs({ outputs, cellId }: { outputs: any[], cellId: string }) {
+  if (!outputs.length) return null;
+
+  return (
+    <div className="space-y-3" data-testid={`results-cell-${cellId}`}>
+      {outputs.map((output, index) => (
+        <NotebookOutput key={`${cellId}-${index}`} output={output} cellId={cellId} index={index} />
+      ))}
     </div>
   );
 }
@@ -283,6 +375,7 @@ export default function Home() {
                   <CellHeader 
                     index={index} 
                     type={cell.type} 
+                    executionCount={cell.execution_count}
                     onRun={() => handleRunCell(cell)} 
                     isRunning={runningCells[cell.id]} 
                   />
@@ -319,13 +412,17 @@ export default function Home() {
                     )}
                   </div>
 
-                  {cellResults[cell.id] && (
+                  {cellResults[cell.id] !== undefined ? (
                     <div className="bg-black/50 border-t p-4">
                       <pre className="text-sm font-mono text-green-400 whitespace-pre-wrap">
-                        {cellResults[cell.id]}
+                        {outputText(cellResults[cell.id])}
                       </pre>
                     </div>
-                  )}
+                  ) : cell.outputs.length > 0 ? (
+                    <div className="bg-black/50 border-t p-4">
+                      <NotebookOutputs outputs={cell.outputs} cellId={cell.id} />
+                    </div>
+                  ) : null}
                 </div>
               </div>
             </div>

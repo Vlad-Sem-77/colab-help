@@ -11,11 +11,18 @@ export interface NotebookCell {
   type: CellType;
   source: string[];
   outputs: any[];
+  execution_count?: number | null;
+  metadata?: Record<string, any>;
   params?: ParamInfo[];
+  original?: Record<string, any>;
 }
 
 export interface Notebook {
   cells: NotebookCell[];
+  metadata?: Record<string, any>;
+  nbformat?: number;
+  nbformat_minor?: number;
+  original?: Record<string, any>;
 }
 
 export function parseNotebook(json: any): Notebook {
@@ -26,22 +33,36 @@ export function parseNotebook(json: any): Notebook {
   const parsedCells = json.cells.map((c: any, i: number) => {
     const id = c.id || `cell-${i}`;
     const sourceArray = Array.isArray(c.source) ? c.source : [c.source || ""];
-    const outputs = c.outputs || [];
+    const outputs = Array.isArray(c.outputs) ? c.outputs : [];
+    const commonFields = {
+      id,
+      source: sourceArray,
+      outputs,
+      execution_count: c.execution_count,
+      metadata: c.metadata,
+      original: c,
+    };
 
     if (c.cell_type === 'markdown') {
-      return { id, type: 'markdown', source: sourceArray, outputs };
+      return { ...commonFields, type: 'markdown' };
     } else if (c.cell_type === 'code') {
       const params = detectParams(sourceArray);
       if (params.length > 0) {
-        return { id, type: 'parameter', source: sourceArray, outputs, params };
+        return { ...commonFields, type: 'parameter', params };
       } else {
-        return { id, type: 'code', source: sourceArray, outputs };
+        return { ...commonFields, type: 'code' };
       }
     }
-    return { id, type: c.cell_type, source: sourceArray, outputs };
+    return { ...commonFields, type: c.cell_type };
   });
 
-  return { cells: parsedCells };
+  return {
+    cells: parsedCells,
+    metadata: json.metadata,
+    nbformat: json.nbformat,
+    nbformat_minor: json.nbformat_minor,
+    original: json,
+  };
 }
 
 function detectParams(sourceLines: string[]): ParamInfo[] {
@@ -73,8 +94,9 @@ function detectParams(sourceLines: string[]): ParamInfo[] {
 }
 
 export function exportNotebook(notebook: Notebook, cellValues: Record<string, Record<string, any>>): string {
-  // Simple reconstructor that bakes values in
+  const originalNotebook = notebook.original || {};
   const exportData = {
+    ...originalNotebook,
     cells: notebook.cells.map(c => {
       let source = [...c.source];
       if (c.type === 'parameter' && cellValues[c.id]) {
@@ -100,15 +122,30 @@ export function exportNotebook(notebook: Notebook, cellValues: Record<string, Re
           return updatedLine;
         });
       }
-      return {
+
+      const originalSource = c.original?.source;
+      const sourceIsUnchanged =
+        JSON.stringify(source) === JSON.stringify(c.source);
+
+      const exportedCell = {
+        ...c.original,
+        id: c.id,
         cell_type: c.type === 'parameter' ? 'code' : c.type,
-        source,
-        outputs: c.outputs
+        source: sourceIsUnchanged && originalSource !== undefined ? originalSource : source,
+        execution_count: c.execution_count !== undefined
+          ? c.execution_count
+          : c.original?.execution_count,
+        metadata: c.metadata !== undefined ? c.metadata : c.original?.metadata,
       };
+
+      if (!c.original || Object.prototype.hasOwnProperty.call(c.original, 'outputs') || c.outputs.length > 0) {
+        return { ...exportedCell, outputs: c.outputs };
+      }
+      return exportedCell;
     }),
-    metadata: {},
-    nbformat: 4,
-    nbformat_minor: 4
+    metadata: notebook.metadata !== undefined ? notebook.metadata : originalNotebook.metadata ?? {},
+    nbformat: notebook.nbformat ?? originalNotebook.nbformat ?? 4,
+    nbformat_minor: notebook.nbformat_minor ?? originalNotebook.nbformat_minor ?? 4,
   };
 
   return JSON.stringify(exportData, null, 2);
