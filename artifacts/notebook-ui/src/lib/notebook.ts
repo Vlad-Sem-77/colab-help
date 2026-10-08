@@ -119,6 +119,13 @@ export function canRunNotebookCell(cell: NotebookCell, state: CellEnabledState):
   return isCellEnabled(state, cell.id) && (cell.type === "code" || cell.type === "parameter");
 }
 
+export function getRunnableNotebookCells(
+  cells: readonly NotebookCell[],
+  state: CellEnabledState,
+): NotebookCell[] {
+  return cells.filter(cell => canRunNotebookCell(cell, state));
+}
+
 export interface NotebookAnalysis {
   totalCells: number;
   markdownCells: number;

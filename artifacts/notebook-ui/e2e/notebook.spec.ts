@@ -80,6 +80,89 @@ test("restores opted-in cell settings after reload and lets the user reset them"
   await expect(firstCodeCell).toHaveAttribute("data-state", "checked");
 });
 
+test("runs enabled parameter cells in order and skips disabled code cells", async ({ page }) => {
+  const parameterRequests: unknown[] = [];
+  const codeRequests: unknown[] = [];
+
+  await page.route("**/api/colab/run", async route => {
+    parameterRequests.push(route.request().postDataJSON());
+    await route.fulfill({
+      json: {
+        status: "ok",
+        taskType: "text_generation",
+        mode: "auto",
+        result: "parameter cell completed",
+        error: null,
+      },
+    });
+  });
+  await page.route("**/api/colab/execute", async route => {
+    codeRequests.push(route.request().postDataJSON());
+    await route.fulfill({ json: { status: "ok", stdout: "code completed", stderr: "" } });
+  });
+
+  await page.getByTestId("input-colab-url").fill("https://example.trycloudflare.com");
+  await page.getByTestId("input-upload-notebook").setInputFiles(notebookFixture);
+  await page.getByTestId("switch-cell-enabled-2").click();
+  await page.getByTestId("button-run-enabled-cells").click();
+
+  await expect(page.getByTestId("status-batch-run"))
+    .toContainText("Последовательный запуск завершён: 1 из 1");
+  await expect(page.getByTestId("status-cell-success-1")).toBeVisible();
+  await expect(page.getByTestId("status-cell-skipped-2")).toBeVisible();
+  await expect(page.getByTestId("result-live-browser-parameters"))
+    .toContainText("parameter cell completed");
+  expect(parameterRequests).toHaveLength(1);
+  expect(codeRequests).toHaveLength(0);
+});
+
+test("stops after the first error and shows it on the failed cell", async ({ page }) => {
+  const executedSources: string[] = [];
+  await page.route("**/api/colab/execute", async route => {
+    const { code } = route.request().postDataJSON();
+    executedSources.push(code);
+    if (code.includes("raise")) {
+      await route.fulfill({
+        status: 502,
+        json: { status: "error", stdout: "", stderr: "ValueError: invalid input" },
+      });
+      return;
+    }
+    await route.fulfill({ json: { status: "ok", stdout: "first completed", stderr: "" } });
+  });
+
+  await page.getByTestId("input-colab-url").fill("https://example.trycloudflare.com");
+  await page.getByTestId("input-upload-notebook").setInputFiles({
+    name: "batch-run.ipynb",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify({
+      cells: [
+        { cell_type: "code", id: "first", source: "print('first')" },
+        { cell_type: "code", id: "failed", source: "raise ValueError('invalid input')" },
+        { cell_type: "code", id: "after-error", source: "print('must not run')" },
+        { cell_type: "code", id: "disabled", source: "print('disabled')" },
+      ],
+    })),
+  });
+  await page.getByTestId("switch-cell-enabled-3").click();
+  await page.getByTestId("button-run-enabled-cells").click();
+
+  await expect(page.getByTestId("status-batch-run"))
+    .toContainText("Запуск остановлен на ячейке 2");
+  await expect(page.getByTestId("status-batch-run"))
+    .toContainText("Следующие ячейки не запускались");
+  await expect(page.getByTestId("status-cell-success-0")).toBeVisible();
+  await expect(page.getByTestId("status-cell-error-1")).toBeVisible();
+  await expect(page.getByTestId("result-live-failed"))
+    .toContainText("ValueError: invalid input");
+  await expect(page.getByTestId("status-cell-success-2")).toHaveCount(0);
+  await expect(page.getByTestId("status-cell-skipped-3")).toBeVisible();
+  expect(executedSources).toEqual([
+    "print('first')",
+    "raise ValueError('invalid input')",
+  ]);
+});
+
 test("keeps the loaded notebook within a mobile viewport", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByTestId("input-upload-notebook").setInputFiles(notebookFixture);

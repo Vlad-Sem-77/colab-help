@@ -10,6 +10,7 @@ import {
   createCellEnabledState,
   explainNotebookCell,
   exportNotebook,
+  getRunnableNotebookCells,
   isCellEnabled,
   parseNotebook,
   readSavedCellEnabledState,
@@ -132,6 +133,29 @@ test("cell enablement is independent and does not change exported notebook conte
   const exported = JSON.parse(exportNotebook(notebook, {}));
   assert.deepEqual(exported, original);
   assert.equal(JSON.stringify(exported).includes("first-code\":false"), false);
+});
+
+test("runnable cells preserve notebook order and exclude disabled and unsupported cells", () => {
+  const notebook = parseNotebook({
+    cells: [
+      { cell_type: "markdown", id: "intro", source: "# Intro" },
+      { cell_type: "code", id: "first", source: "print('first')" },
+      { cell_type: "code", id: "parameters", source: "temperature = 0.7" },
+      { cell_type: "raw", id: "raw", source: "raw content" },
+      { cell_type: "code", id: "disabled", source: "print('disabled')" },
+      { cell_type: "code", id: "last", source: "print('last')" },
+    ],
+  });
+  const enabled = setCellEnabled(
+    createCellEnabledState(notebook.cells),
+    "disabled",
+    false,
+  );
+
+  assert.deepEqual(
+    getRunnableNotebookCells(notebook.cells, enabled).map(cell => cell.id),
+    ["first", "parameters", "last"],
+  );
 });
 
 test("cell enablement preferences are isolated by notebook, restored across loads, and resettable", async () => {

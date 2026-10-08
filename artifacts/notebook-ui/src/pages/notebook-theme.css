@@ -1058,6 +1058,7 @@ html[data-notebook-theme="windows95"] .notebook-page [data-testid="card-notebook
 
   .notebook-document-actions {
     width: 100%;
+    flex-wrap: wrap;
   }
 
   .notebook-document-actions > button,
@@ -1065,6 +1066,12 @@ html[data-notebook-theme="windows95"] .notebook-page [data-testid="card-notebook
   .notebook-document-actions [data-slot="button"] {
     flex: 1;
     justify-content: center;
+  }
+
+  .notebook-document-actions > [data-testid="button-run-enabled-cells"] {
+    flex-basis: 100%;
+    min-width: 0;
+    white-space: normal;
   }
 
   .notebook-reader-panels {
