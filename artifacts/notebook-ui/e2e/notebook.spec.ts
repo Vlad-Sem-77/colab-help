@@ -96,6 +96,25 @@ test("switches notebook styles and restores the selected style after reload", as
   await expect(page.locator("html")).toHaveAttribute("data-notebook-theme", "light-waves");
 });
 
+test("uses the selected notebook theme for provider dropdowns", async ({ page }) => {
+  await page.getByTestId("input-upload-notebook").setInputFiles(notebookFixture);
+  const providerSelect = page.getByTestId("select-ai-provider");
+
+  await providerSelect.click();
+  const lightListbox = page.getByRole("listbox");
+  await expect(lightListbox).toBeVisible();
+  await expect.poll(() => lightListbox.evaluate((element) => getComputedStyle(element).backgroundColor))
+    .toBe("rgb(255, 255, 250)");
+
+  await page.keyboard.press("Escape");
+  await page.getByTestId("button-theme-windows95").click();
+  await providerSelect.click();
+  const windowsListbox = page.getByRole("listbox");
+  await expect(windowsListbox).toBeVisible();
+  await expect.poll(() => windowsListbox.evaluate((element) => getComputedStyle(element).backgroundColor))
+    .toBe("rgb(222, 222, 222)");
+});
+
 test("uploads notebook text, parameters and saved results with the notebook helpers", async ({ page }) => {
   await page.getByTestId("input-upload-notebook").setInputFiles(notebookFixture);
 
@@ -490,6 +509,12 @@ test("keeps the loaded notebook within a mobile viewport", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByTestId("input-upload-notebook").setInputFiles(notebookFixture);
   await expect(page.getByTestId("card-notebook-assistant")).toBeVisible();
+  await expect(page.locator(
+    ".notebook-connect-panel, .notebook-page-subtitle, .notebook-upload-description, .notebook-upload-footnote, .notebook-cell-toggle-note",
+  )).toHaveCount(0);
+  await expect(page.getByTestId("notice-simulation-mode")).toHaveCount(0);
+  await expect(page.getByTestId("status-simulation-mode"))
+    .toHaveText("Симуляция · код не запускается");
 
   const dimensions = await page.evaluate(() => {
     const main = document.querySelector("main");
@@ -509,4 +534,30 @@ test("keeps the loaded notebook within a mobile viewport", async ({ page }) => {
   expect(dimensions.bodyWidth).toBeLessThanOrEqual(dimensions.viewportWidth);
   expect(dimensions.mainScrollWidth).toBeLessThanOrEqual(dimensions.mainClientWidth);
   expect(dimensions.notebookScrollWidth).toBeLessThanOrEqual(dimensions.notebookClientWidth);
+
+  const sidebarIsAboveNotebook = () => page.evaluate(() => {
+    const shell = document.querySelector(".notebook-app-shell");
+    const sidebar = document.querySelector(".notebook-sidebar");
+    const main = document.querySelector("main");
+    if (!shell || !sidebar || !main) return false;
+    const sidebarRect = sidebar.getBoundingClientRect();
+    const mainRect = main.getBoundingClientRect();
+    return getComputedStyle(shell).flexDirection === "column"
+      && Math.abs(sidebarRect.left - mainRect.left) < 1
+      && sidebarRect.bottom <= mainRect.top + 1;
+  });
+  const documentActionsFit = () => page.evaluate(() => {
+    const buttons = Array.from(document.querySelectorAll(".notebook-document-actions button, .notebook-document-actions label"));
+    const viewportWidth = document.documentElement.clientWidth;
+    return buttons.length === 3 && buttons.every((button) => {
+      const rect = button.getBoundingClientRect();
+      return rect.left >= 0 && rect.right <= viewportWidth + 1;
+    });
+  });
+  expect(await sidebarIsAboveNotebook()).toBe(true);
+  expect(await documentActionsFit()).toBe(true);
+
+  await page.setViewportSize({ width: 980, height: 900 });
+  expect(await sidebarIsAboveNotebook()).toBe(true);
+  expect(await documentActionsFit()).toBe(true);
 });

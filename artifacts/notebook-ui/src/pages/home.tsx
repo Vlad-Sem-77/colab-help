@@ -698,7 +698,6 @@ export default function Home() {
             <div>
               <p className="notebook-eyebrow">COLAB READER</p>
               <h1>Notebook Reader</h1>
-              <p className="notebook-page-subtitle">Изучайте блокноты и их результаты в удобном стиле.</p>
             </div>
           </div>
           <ThemePicker theme={theme} onChange={setTheme} />
@@ -709,35 +708,23 @@ export default function Home() {
             <div className="notebook-upload-icon"><Upload aria-hidden="true" /></div>
             <p className="notebook-eyebrow">ВАШ РАБОЧИЙ БЛОКНОТ</p>
             <h2>Начните с файла .ipynb</h2>
-            <p className="notebook-upload-description">
-              Просматривайте текст, параметры, код и сохранённые результаты. Исходный файл останется на вашем устройстве.
-            </p>
             <Input type="file" accept=".ipynb" onChange={handleFileUpload} className="hidden" id="file-upload" data-testid="input-upload-notebook" />
             <Button asChild className="notebook-upload-button" size="lg">
               <label htmlFor="file-upload" className="cursor-pointer"><Upload aria-hidden="true" /> Выбрать блокнот</label>
             </Button>
-            <p className="notebook-upload-footnote">Поддерживаются файлы Jupyter Notebook (.ipynb)</p>
           </section>
         ) : (
           <div className="notebook-content">
-            <section
-              className="rounded-md border border-primary/25 bg-primary/5 p-4 text-sm"
-              role="note"
-              data-testid="notice-simulation-mode"
-            >
-              <p className="font-semibold">Режим симуляции — код не запускается</p>
-              <p className="mt-1 text-muted-foreground">
-                Кнопки показывают порядок ячеек и пропуск выключенных. Новые результаты не создаются, Colab для этого не нужен.
-              </p>
-            </section>
             <section className="notebook-document-toolbar">
               <div>
-                <p className="notebook-eyebrow">РАБОЧАЯ ОБЛАСТЬ</p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="notebook-eyebrow">РАБОЧАЯ ОБЛАСТЬ</p>
+                  <span className="notebook-simulation-status" data-testid="status-simulation-mode">
+                    Симуляция · код не запускается
+                  </span>
+                </div>
                 <h2>Блокнот готов</h2>
-                <p>Ячеек: {notebook.cells.length} · результат и параметры доступны ниже</p>
-                <p className="notebook-cell-toggle-note">
-                  Отключённые ячейки пропускаются в симуляции. При желании сохраняйте их состояние отдельно от .ipynb.
-                </p>
+                <p>Ячеек: {notebook.cells.length}</p>
                 <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
                   <div className="flex items-center gap-2">
                     <Switch

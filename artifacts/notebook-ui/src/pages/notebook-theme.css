@@ -1,3 +1,33 @@
+html[data-notebook-theme="light-waves"] {
+  color-scheme: light;
+  --popover: 60 100% 99%;
+  --popover-foreground: 150 13% 24%;
+  --accent: 100 20% 94%;
+  --accent-foreground: 150 13% 24%;
+  --border: 105 15% 89%;
+  --ring: 153 17% 53%;
+}
+
+html[data-notebook-theme="windows95"] {
+  color-scheme: light;
+  --popover: 0 0% 87%;
+  --popover-foreground: 0 0% 12%;
+  --accent: 0 0% 82%;
+  --accent-foreground: 0 0% 12%;
+  --border: 0 0% 53%;
+  --ring: 240 100% 25%;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-select-content [data-highlighted] {
+  background: #e9f1ec;
+  color: #35654d;
+}
+
+html[data-notebook-theme="windows95"] .notebook-select-content [data-highlighted] {
+  background: #000080;
+  color: #fff;
+}
+
 html[data-notebook-theme="light-waves"] body {
   background: #f4f6f1;
   color: #34433f;
@@ -352,6 +382,26 @@ html[data-notebook-theme="light-waves"] .notebook-upload-footnote {
   display: flex;
   flex-direction: column;
   gap: 20px;
+}
+
+.notebook-simulation-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 7px;
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-foreground));
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+html[data-notebook-theme="windows95"] .notebook-simulation-status {
+  border-color: #fff #555 #555 #fff;
+  border-radius: 0;
+  background: #dedede;
+  color: #333;
 }
 
 html[data-notebook-theme="light-waves"] .notebook-document-toolbar {
@@ -927,7 +977,7 @@ html[data-notebook-theme="windows95"] .notebook-page [data-testid="card-notebook
   }
 }
 
-@media (max-width: 760px) {
+@media (max-width: 1024px) {
   .notebook-app-shell {
     height: 100dvh !important;
     flex-direction: column;
@@ -939,7 +989,7 @@ html[data-notebook-theme="windows95"] .notebook-page [data-testid="card-notebook
     height: auto !important;
     flex: 0 0 auto;
     grid-template-columns: auto minmax(0, 1fr);
-    grid-template-rows: auto auto;
+    grid-template-rows: auto;
     border-right: 0 !important;
     border-bottom: 1px solid;
   }
@@ -1058,13 +1108,21 @@ html[data-notebook-theme="windows95"] .notebook-page [data-testid="card-notebook
 
   .notebook-document-actions {
     width: 100%;
+    min-width: 0;
+    flex: 1 1 auto;
     flex-wrap: wrap;
+  }
+
+  .notebook-document-toolbar > * {
+    width: 100%;
+    min-width: 0;
   }
 
   .notebook-document-actions > button,
   .notebook-document-actions > label,
   .notebook-document-actions [data-slot="button"] {
     flex: 1;
+    min-width: 0;
     justify-content: center;
   }
 

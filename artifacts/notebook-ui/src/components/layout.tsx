@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { Book, History, Settings2 } from "lucide-react";
+import { Book, History } from "lucide-react";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
@@ -26,19 +26,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
             </div>
           </Link>
         </nav>
-
-        <div className="notebook-connect-panel space-y-2 border-t border-border bg-muted/30 p-4">
-          <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-            <Settings2 className="h-4 w-4" />
-            <span>ИИ-консультант</span>
-          </div>
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            Выберите провайдера и модели в блоке «ИИ-провайдер и модели» после загрузки блокнота.
-          </p>
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            Colab не нужен для просмотра и симуляции ячеек. Онлайн-вопросы отправляются выбранному AI-провайдеру только после вашего разрешения.
-          </p>
-        </div>
       </aside>
 
       {/* Main Content */}
