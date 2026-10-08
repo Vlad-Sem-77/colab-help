@@ -1,3 +1,11 @@
+import {
+  explainImportedLibraries,
+  explainNotebookCell,
+  getNotebookCellActions,
+} from "./notebook-explanations.ts";
+
+export { explainImportedLibraries, explainNotebookCell } from "./notebook-explanations.ts";
+
 export type CellType = 'markdown' | 'code' | 'parameter' | 'raw';
 
 export interface ParamInfo {
@@ -286,31 +294,6 @@ export function exportNotebook(notebook: Notebook, cellValues: Record<string, Re
   return JSON.stringify(exportData, null, 2);
 }
 
-export function explainNotebookCell(cell: NotebookCell, index: number): string {
-  const source = cellSource(cell).trim();
-  if (!source) {
-    return `Ячейка ${index + 1} пока пустая.`;
-  }
-  if (cell.type === "markdown") {
-    const title = source.match(/^\s{0,3}#{1,6}\s+(.+)$/m)?.[1]?.trim();
-    const text = markdownText(source).replace(/\s+/g, " ");
-    const preview = text.length > 180 ? `${text.slice(0, 177)}…` : text;
-    return title
-      ? `Раздел «${title}». ${preview}`
-      : `Текстовое пояснение: ${preview}`;
-  }
-
-  const actions = codeActions(source);
-  const params = cell.params?.map(param => param.varName) ?? [];
-  if (cell.type === "parameter" && params.length > 0) {
-    return `Ячейка с настраиваемыми параметрами: ${params.join(", ")}.${actions.length ? ` Также ${actions.join(" и ")}.` : ""}`;
-  }
-  if (actions.length > 0) {
-    return `По коду видно, что ячейка ${actions.join("; ")}.`;
-  }
-  return "Выполняет код Python. Описание выведено по содержимому ячейки; проверьте код и сохранённый результат ниже.";
-}
-
 function outputSource(output: any): string {
   if (output?.output_type === "stream") {
     return Array.isArray(output.text) ? output.text.join("") : String(output.text ?? "");
@@ -330,33 +313,19 @@ function outputSource(output: any): string {
   return "";
 }
 
-function codeActions(source: string): string[] {
-  const actions: string[] = [];
-  const imports = [...source.matchAll(/^\s*(?:import\s+([\w.]+)|from\s+([\w.]+)\s+import)/gm)]
-    .map(match => match[1] || match[2])
-    .filter(Boolean);
-  if (imports.length > 0) {
-    actions.push(`подключает библиотеки ${[...new Set(imports)].slice(0, 4).join(", ")}`);
-  }
-  if (/\b(read_csv|read_excel|read_json|read_parquet|read_sql|load_dataset|open)\s*\(/i.test(source)) {
-    actions.push("загружает данные или файл");
-  }
-  if (/\b(def|class)\s+\w+/m.test(source)) {
-    actions.push("определяет функцию или класс");
-  }
-  if (/\b(fit|train|backward|optimizer|Trainer)\s*\(?/i.test(source)) {
-    actions.push("обучает или настраивает модель");
-  }
-  if (/\b(plt\.|sns\.|plotly|\.plot\s*\()/i.test(source)) {
-    actions.push("строит визуализацию");
-  }
-  if (/\b(print|display)\s*\(/i.test(source)) {
-    actions.push("выводит текст или данные");
-  }
-  if (/\b(groupby|pivot_table|merge|concat|dropna|fillna|astype)\s*\(/i.test(source)) {
-    actions.push("обрабатывает таблицу или набор данных");
-  }
-  return [...new Set(actions)];
+function codeExcerptWithoutComments(cell: NotebookCell): string {
+  if (cell.type === "markdown") return "";
+  return cellSource(cell)
+    .split(/\r?\n/)
+    .filter(line => !/^\s*#/.test(line))
+    .join("\n")
+    .trim();
+}
+
+function formatLibraryExplanations(cell: NotebookCell, notebook: Notebook): string {
+  return explainImportedLibraries(cell, notebook)
+    .map(item => `${item.name}: ${item.purpose} В этом ноутбуке — ${item.notebookUse}.`)
+    .join("\n");
 }
 
 export function analyzeNotebook(notebook: Notebook): NotebookAnalysis {
@@ -383,7 +352,7 @@ export function analyzeNotebook(notebook: Notebook): NotebookAnalysis {
 
   const actions = [...new Set(notebook.cells
     .filter(cell => cell.type !== "markdown")
-    .flatMap(cell => codeActions(cellSource(cell))))].slice(0, 3);
+    .flatMap(cell => getNotebookCellActions(cellSource(cell))))].slice(0, 3);
   const parts = [
     `Ноутбук содержит ${notebook.cells.length} ячеек: ${codeCells + parameterCells} с кодом и параметрами, ${markdownCells} текстовых.`,
     language ? `Язык ядра: ${language}.` : "",
@@ -425,6 +394,7 @@ export function answerNotebookQuestion(notebook: Notebook, question: string): No
   }
 
   const analysis = analyzeNotebook(notebook);
+  const asksForLibraries = /библиотек|импорт|packages?|libraries/i.test(normalizedQuestion);
   if (/(структур|резюм|кратк|цель|содержит|делает ноутбук|обзор)/i.test(normalizedQuestion)) {
     const sectionList = analysis.sections.length
       ? `\n\nРазделы: ${analysis.sections.join(" → ")}.`
@@ -437,13 +407,15 @@ export function answerNotebookQuestion(notebook: Notebook, question: string): No
     const index = Number(cellNumber) - 1;
     const cell = notebook.cells[index];
     if (cell) {
-      const source = cellSource(cell).trim();
+      const source = codeExcerptWithoutComments(cell);
       const excerpt = source.length > 700 ? `${source.slice(0, 697)}…` : source;
       const output = cell.outputs.map(outputSource).filter(Boolean).join("\n").trim();
+      const libraryDetails = formatLibraryExplanations(cell, notebook);
       return {
         text: [
-          explainNotebookCell(cell, index),
-          excerpt ? `\n\nКод или текст ячейки ${index + 1}:\n${excerpt}` : "",
+          explainNotebookCell(cell, index, notebook),
+          libraryDetails ? `\n\nБиблиотеки:\n${libraryDetails}` : "",
+          excerpt ? `\n\nФрагмент кода ячейки ${index + 1}:\n${excerpt}` : "",
           output ? `\n\nСохранённый результат:\n${output.slice(0, 500)}` : "",
         ].join(""),
         sources: [index],
@@ -454,7 +426,6 @@ export function answerNotebookQuestion(notebook: Notebook, question: string): No
   const terms = [...new Set(
     normalizedQuestion.toLocaleLowerCase().match(/[а-яёa-z_][а-яёa-z0-9_]*/gi) ?? [],
   )].filter(term => term.length > 1 && !QUESTION_STOP_WORDS.has(term));
-  const asksForLibraries = /библиотек|импорт|packages?|libraries/i.test(normalizedQuestion);
   const asksForDataSources = /данн|файл|источник|dataset|csv|excel/i.test(normalizedQuestion);
   const ranked = notebook.cells
     .map((cell, index) => {
@@ -480,14 +451,15 @@ export function answerNotebookQuestion(notebook: Notebook, question: string): No
   }
 
   const answers = ranked.map(({ cell, index, score }) => {
-    const rawSource = cellSource(cell).trim();
+    const rawSource = codeExcerptWithoutComments(cell);
     const output = cell.outputs.map(outputSource).filter(Boolean).join("\n").trim();
-    const quote = cell.type === "markdown" ? markdownText(rawSource) : rawSource;
-    const excerpt = quote.length > 560 ? `${quote.slice(0, 557)}…` : quote;
+    const excerpt = rawSource.length > 560 ? `${rawSource.slice(0, 557)}…` : rawSource;
     const outputExcerpt = output.length > 350 ? `${output.slice(0, 347)}…` : output;
+    const libraryDetails = asksForLibraries ? formatLibraryExplanations(cell, notebook) : "";
     return [
-      `Ячейка ${index + 1} (${score} совпадений): ${explainNotebookCell(cell, index)}`,
-      excerpt ? `Фрагмент: “${excerpt}”` : "",
+      `Ячейка ${index + 1} (${score} совпадений): ${explainNotebookCell(cell, index, notebook)}`,
+      libraryDetails ? `Библиотеки:\n${libraryDetails}` : "",
+      excerpt ? `Код: ${excerpt}` : "",
       outputExcerpt ? `Сохранённый результат: “${outputExcerpt}”` : "",
     ].filter(Boolean).join("\n");
   });
@@ -498,12 +470,3 @@ export function answerNotebookQuestion(notebook: Notebook, question: string): No
   };
 }
 
-function markdownText(source: string): string {
-  return source
-    .replace(/^\s{0,3}#{1,6}\s+/gm, "")
-    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
-    .replace(/[`*_~]/g, "")
-    .replace(/^\s*[-*+]\s+/gm, "")
-    .trim();
-}

@@ -8,6 +8,7 @@ import {
   clearSavedCellEnabledState,
   createNotebookSettingsId,
   createCellEnabledState,
+  explainImportedLibraries,
   explainNotebookCell,
   exportNotebook,
   getRunnableNotebookCells,
@@ -239,7 +240,10 @@ test("summarizes notebook structure, headings, execution state, and errors", () 
   assert.deepEqual(analysis.sections, ["Load data"]);
   assert.match(analysis.summary, /Load data/);
   assert.match(analysis.summary, /ошибок: 1/);
-  assert.match(explainNotebookCell(notebook.cells[1], 1), /pandas/);
+  const libraryExplanations = explainImportedLibraries(notebook.cells[1], notebook);
+  assert.equal(libraryExplanations[0]?.name, "pandas");
+  assert.match(libraryExplanations[0]?.purpose ?? "", /табличными данными/);
+  assert.match(libraryExplanations[0]?.notebookUse ?? "", /загрузки исходных файлов/);
 });
 
 test("answers questions with relevant notebook cells and saved outputs", () => {
@@ -262,7 +266,8 @@ test("answers questions with relevant notebook cells and saved outputs", () => {
 
   const cellAnswer = answerNotebookQuestion(notebook, "Что происходит в ячейке 1?");
   assert.deepEqual(cellAnswer.sources, [0]);
-  assert.match(cellAnswer.text, /Preparation/);
+  assert.match(cellAnswer.text, /подготовку входных данных/);
+  assert.doesNotMatch(cellAnswer.text, /Clean the source data first/);
 
   const structureAnswer = answerNotebookQuestion(notebook, "Какова структура ноутбука?");
   assert.equal(structureAnswer.sources.length, 0);

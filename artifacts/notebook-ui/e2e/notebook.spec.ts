@@ -89,9 +89,22 @@ test("switches notebook styles and restores the selected style after reload", as
   await expect(lightWavesButton).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator("html")).toHaveAttribute("data-notebook-theme", "light-waves");
 
+  await page.getByTestId("input-upload-notebook").setInputFiles(notebookFixture);
+  const notebookCell = page.locator(".notebook-cell").first();
+  await expect.poll(() => notebookCell.evaluate(element => getComputedStyle(element).borderWidth))
+    .toBe("0px");
+  await expect.poll(() => notebookCell.evaluate(element => getComputedStyle(element).clipPath))
+    .toBe("none");
+
   await windows95Button.click();
   await expect(windows95Button).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator("html")).toHaveAttribute("data-notebook-theme", "windows95");
+  await expect.poll(() => notebookCell.evaluate(element => getComputedStyle(element).borderWidth))
+    .toBe("1px");
+  await expect.poll(() => notebookCell.evaluate(element => getComputedStyle(element).clipPath))
+    .toContain("4px");
+  await expect.poll(() => notebookCell.evaluate(element => getComputedStyle(element).boxShadow))
+    .toContain("inset");
   await expect.poll(() => page.evaluate(() => localStorage.getItem("notebook-ui-theme")))
     .toBe("windows95");
 
@@ -181,7 +194,9 @@ test("uploads notebook text, parameters and saved results with the notebook help
   await page.getByTestId("input-notebook-question").fill("Что происходит в ячейке 1?");
   await page.getByTestId("button-send-notebook-question").click();
   await expect(page.getByTestId("message-notebook-assistant-1"))
-    .toContainText("Этот текст описывает подготовку данных.");
+    .toContainText("Объясняет источник или подготовку входных данных");
+  await expect(page.getByTestId("message-notebook-assistant-1"))
+    .not.toContainText("Этот текст описывает подготовку данных.");
 });
 
 test("keeps the provider key in the server browser session and supports voice questions and spoken answers", async ({ page }) => {
@@ -354,7 +369,7 @@ test("clears the previous notebook state after a successful replacement", async 
   await page.getByTestId("input-notebook-question").fill("Что происходит в ячейке 1?");
   await page.getByTestId("button-send-notebook-question").click();
   await expect(page.getByTestId("message-notebook-assistant-1"))
-    .toContainText("Этот текст описывает подготовку данных.");
+    .toContainText("Объясняет источник или подготовку входных данных");
 
   await page.getByTestId("checkbox-notebook-ai-consent").click();
   await page.getByTestId("input-assistant-question").fill("Объясни первый блокнот");
@@ -441,7 +456,9 @@ test("keeps the open notebook available after a failed replacement upload", asyn
   const notifications = page.getByRole("region", { name: "Notifications (F8)" });
   await page.getByTestId("input-upload-notebook").setInputFiles(notebookFixture);
   await expect(page.getByTestId("text-cell-explanation-0"))
-    .toContainText("Этот текст описывает подготовку данных.");
+    .toContainText("Объясняет источник или подготовку входных данных");
+  await expect(page.getByTestId("text-cell-explanation-0"))
+    .not.toContainText("Этот текст описывает подготовку данных.");
 
   const invalidReplacements = [
     notebookFile("replacement-broken-json.ipynb", "{ invalid"),
@@ -454,10 +471,39 @@ test("keeps the open notebook available after a failed replacement upload", asyn
     await expect(notifications.getByText("Не удалось прочитать блокнот", { exact: true }))
       .toBeVisible();
     await expect(page.getByTestId("text-cell-explanation-0"))
-      .toContainText("Этот текст описывает подготовку данных.");
+      .toContainText("Объясняет источник или подготовку входных данных");
+    await expect(page.getByTestId("text-cell-explanation-0"))
+      .not.toContainText("Этот текст описывает подготовку данных.");
     await expect(page.getByTestId("card-notebook-assistant")).toBeVisible();
     await expect(page.getByTestId("button-download-notebook")).toBeVisible();
   }
+});
+
+test("explains what imported libraries do and how this notebook uses them", async ({ page }) => {
+  const importedNotebook = notebookFile("library-explanations.ipynb", JSON.stringify({
+    cells: [
+      { cell_type: "markdown", source: "# Анализ продаж\n\nПодготовка входных данных." },
+      {
+        cell_type: "code",
+        source: [
+          "import pandas as pd\n",
+          "import numpy as np\n",
+          "sales = pd.read_csv('sales.csv')\n",
+          "sales = sales.dropna()\n",
+          "average_sales = np.mean(sales['amount'])\n",
+        ],
+      },
+    ],
+  }));
+
+  await page.getByTestId("input-upload-notebook").setInputFiles(importedNotebook);
+  const explanations = page.getByTestId("list-import-explanations-1");
+  await expect(explanations).toBeVisible();
+  await expect(explanations).toContainText("pandas");
+  await expect(explanations).toContainText("табличными данными");
+  await expect(explanations).toContainText("загрузки исходной таблицы");
+  await expect(explanations).toContainText("NumPy");
+  await expect(explanations).toContainText("числовых массивах");
 });
 
 test("restores opted-in cell settings after reload and lets the user reset them", async ({ page }) => {

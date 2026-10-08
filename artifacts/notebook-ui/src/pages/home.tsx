@@ -30,6 +30,7 @@ import {
   clearSavedCellEnabledState,
   createNotebookSettingsId,
   createCellEnabledState,
+  explainImportedLibraries,
   explainNotebookCell,
   getRunnableNotebookCells,
   isCellEnabled,
@@ -848,6 +849,7 @@ export default function Home() {
                 let borderColor = "border-gray-500";
                 if (cell.type === 'code') borderColor = "border-blue-500";
                 if (cell.type === 'parameter') borderColor = "border-orange-500";
+                const libraryExplanations = explainImportedLibraries(cell, notebook);
 
                 return (
                   <section
@@ -903,13 +905,35 @@ export default function Home() {
                               </div>
                             </div>
                           )}
-                          <p
+                          <div
                             className="notebook-cell-explanation mt-4 border-t pt-3 text-sm leading-relaxed text-muted-foreground"
-                            data-testid={`text-cell-explanation-${index}`}
                           >
-                            <span className="font-medium text-foreground">Пояснение: </span>
-                            {explainNotebookCell(cell, index)}
-                          </p>
+                            <p
+                              className="m-0"
+                              data-testid={`text-cell-explanation-${index}`}
+                            >
+                              <span className="font-medium text-foreground">Смысл ячейки: </span>
+                              {explainNotebookCell(cell, index, notebook)}
+                            </p>
+                            {libraryExplanations.length > 0 && (
+                              <div className="mt-2" data-testid={`list-import-explanations-${index}`}>
+                                <p className="m-0 font-medium text-foreground">
+                                  Зачем здесь эти библиотеки
+                                </p>
+                                <ul className="mt-1 list-disc space-y-1 pl-5">
+                                  {libraryExplanations.map(library => (
+                                    <li
+                                      key={library.name}
+                                      data-testid={`library-explanation-${index}-${library.name}`}
+                                    >
+                                      <span className="font-medium text-foreground">{library.name}.</span>{" "}
+                                      {library.purpose} В этом ноутбуке: {library.notebookUse}.
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
                         </div>
 
                         {cellResults[cell.id] !== undefined ? (
