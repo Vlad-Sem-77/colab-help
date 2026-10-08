@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Upload, Play, Download, Code, FileText, Settings2, Loader2, Monitor, Waves, SkipForward, RotateCcw, CheckCircle2, CircleAlert } from "lucide-react";
+import { Upload, Play, Download, Code, FileText, Settings2, Loader2, Monitor, Waves, SkipForward, RotateCcw, CheckCircle2 } from "lucide-react";
 import "./notebook-theme.css";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -30,18 +30,26 @@ import {
   setCellEnabled,
 } from "@/lib/notebook";
 import { useColabUrl } from "@/hooks/use-colab-url";
-import { useRunExperiment } from "@workspace/api-client-react";
 import { NotebookReader } from "@/components/notebook-reader";
 
 type NotebookTheme = "light-waves" | "windows95";
-type CellRunStatus = "running" | "success" | "error";
+type CellRunStatus = "running" | "simulated";
 type BatchRunState =
   | { status: "running"; currentCellId: string; cellNumber: number; position: number; total: number }
-  | { status: "success"; completed: number; total: number }
-  | { status: "error"; completed: number; total: number; failedCellId: string; error: string }
+  | { status: "simulated"; completed: number; total: number }
   | { status: "empty" };
 
 const THEME_STORAGE_KEY = "notebook-ui-theme";
+const MAX_SIMULATION_DURATION_MS = 2400;
+const MAX_SIMULATION_STEP_MS = 180;
+
+function waitForSimulationStep(totalSteps: number): Promise<void> {
+  const delay = Math.max(
+    24,
+    Math.min(MAX_SIMULATION_STEP_MS, Math.ceil(MAX_SIMULATION_DURATION_MS / Math.max(totalSteps, 1))),
+  );
+  return new Promise(resolve => window.setTimeout(resolve, delay));
+}
 
 function readSavedTheme(): NotebookTheme {
   try {
@@ -137,19 +145,13 @@ function CellHeader({
         {runStatus === "running" && (
           <Badge variant="secondary" role="status" data-testid={`status-cell-running-${index}`}>
             <Loader2 className="mr-1 h-3 w-3 animate-spin" aria-hidden="true" />
-            Выполняется
+            Симулируется
           </Badge>
         )}
-        {runStatus === "success" && (
-          <Badge variant="secondary" data-testid={`status-cell-success-${index}`}>
+        {runStatus === "simulated" && (
+          <Badge variant="secondary" data-testid={`status-cell-simulated-${index}`}>
             <CheckCircle2 className="mr-1 h-3 w-3" aria-hidden="true" />
-            Выполнена
-          </Badge>
-        )}
-        {runStatus === "error" && (
-          <Badge variant="destructive" data-testid={`status-cell-error-${index}`}>
-            <CircleAlert className="mr-1 h-3 w-3" aria-hidden="true" />
-            Ошибка
+            Пройдена в симуляции
           </Badge>
         )}
       </div>
@@ -164,7 +166,7 @@ function CellHeader({
             data-testid={`button-run-cell-${index}`}
           >
             {isRunning ? <Loader2 className="w-3 h-3 mr-1 animate-spin" /> : <Play className="w-3 h-3 mr-1" />}
-            Run
+            {isRunning ? "Симулируется" : "Симулировать"}
           </Button>
         )}
         <span className="text-xs text-muted-foreground">
@@ -400,7 +402,6 @@ export default function Home() {
   
   const { colabUrl } = useColabUrl();
   const { toast } = useToast();
-  const runExperiment = useRunExperiment();
   useEffect(() => {
     document.documentElement.dataset.notebookTheme = theme;
     try {
@@ -534,60 +535,8 @@ export default function Home() {
     toast({ title: "Настройки ячеек сброшены" });
   };
 
-  const executeNotebookCell = async (cell: NotebookCell): Promise<string> => {
-    if (!colabUrl) {
-      throw new Error("Вставьте Cloudflare URL из Colab в сайдбар.");
-    }
-
-    if (cell.type === "parameter") {
-      const values = cellValues[cell.id] || {};
-      const getVal = (name: string, def: any) => values[name] !== undefined ? values[name] : def;
-
-      const res = await runExperiment.mutateAsync({
-        data: {
-          colabUrl,
-          mode: "auto",
-          taskType: getVal("task_type", "text_generation"),
-          model: getVal("model", undefined),
-          params: {
-            prompt: getVal("prompt", ""),
-            temperature: getVal("temperature", 0.7),
-            maxTokens: getVal("max_tokens", 1024) || getVal("max_length", 1024),
-            systemPrompt: getVal("system_prompt", undefined),
-          },
-        },
-      });
-
-      if (res.status === "error") {
-        throw new Error(res.error || "Colab не смог выполнить ячейку.");
-      }
-      return res.result || "(no output)";
-    }
-
-    const resp = await fetch("/api/colab/execute", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ colabUrl, code: cell.source.join("") }),
-    });
-    const data = await resp.json();
-    if (!resp.ok || data.status === "error") {
-      throw new Error(data.stderr || data.error || "Execution failed");
-    }
-    return [data.stdout, data.stderr ? `[stderr]\n${data.stderr}` : ""]
-      .filter(Boolean)
-      .join("\n") || "(no output)";
-  };
-
-  const errorMessage = (error: unknown) =>
-    error instanceof Error ? error.message : "Не удалось выполнить ячейку.";
-
   const handleRunCell = async (cell: NotebookCell) => {
     if (!canRunNotebookCell(cell, cellEnabled)) return;
-
-    if (!colabUrl) {
-      toast({ title: "Colab URL required", description: "Вставьте Cloudflare URL из Colab в сайдбар.", variant: "destructive" });
-      return;
-    }
     if (isBatchRunning) return;
 
     setRunningCells(prev => ({ ...prev, [cell.id]: true }));
@@ -595,12 +544,8 @@ export default function Home() {
     setBatchRunState(null);
 
     try {
-      const output = await executeNotebookCell(cell);
-      setCellResults(prev => ({ ...prev, [cell.id]: output }));
-      setCellRunStatuses(prev => ({ ...prev, [cell.id]: "success" }));
-    } catch (error) {
-      setCellResults(prev => ({ ...prev, [cell.id]: `❌ Ошибка:\n${errorMessage(error)}` }));
-      setCellRunStatuses(prev => ({ ...prev, [cell.id]: "error" }));
+      await waitForSimulationStep(1);
+      setCellRunStatuses(prev => ({ ...prev, [cell.id]: "simulated" }));
     } finally {
       setRunningCells(prev => ({ ...prev, [cell.id]: false }));
     }
@@ -608,10 +553,6 @@ export default function Home() {
 
   const handleRunEnabledCells = async () => {
     if (!notebook || isBatchRunning || Object.values(runningCells).some(Boolean)) return;
-    if (!colabUrl) {
-      toast({ title: "Colab URL required", description: "Вставьте Cloudflare URL из Colab в сайдбар.", variant: "destructive" });
-      return;
-    }
 
     const cellsToRun = getRunnableNotebookCells(notebook.cells, cellEnabled);
     if (cellsToRun.length === 0) {
@@ -627,19 +568,9 @@ export default function Home() {
       position: 1,
       total: cellsToRun.length,
     });
-    setCellResults(prev => {
-      const next = { ...prev };
-      for (const cell of cellsToRun) delete next[cell.id];
-      return next;
-    });
-    setCellRunStatuses(prev => {
-      const next = { ...prev };
-      for (const cell of cellsToRun) delete next[cell.id];
-      return next;
-    });
+    setCellRunStatuses({});
 
     let completed = 0;
-    let failure: { cell: NotebookCell; message: string } | null = null;
     try {
       for (let index = 0; index < cellsToRun.length; index += 1) {
         const cell = cellsToRun[index];
@@ -653,35 +584,20 @@ export default function Home() {
         setRunningCells(prev => ({ ...prev, [cell.id]: true }));
         setCellRunStatuses(prev => ({ ...prev, [cell.id]: "running" }));
 
-        try {
-          const output = await executeNotebookCell(cell);
-          setCellResults(prev => ({ ...prev, [cell.id]: output }));
-          setCellRunStatuses(prev => ({ ...prev, [cell.id]: "success" }));
-          completed += 1;
-        } catch (error) {
-          const message = errorMessage(error);
-          setCellResults(prev => ({ ...prev, [cell.id]: `❌ Ошибка:\n${message}` }));
-          setCellRunStatuses(prev => ({ ...prev, [cell.id]: "error" }));
-          failure = { cell, message };
-          break;
-        } finally {
-          setRunningCells(prev => ({ ...prev, [cell.id]: false }));
-        }
+        await waitForSimulationStep(cellsToRun.length);
+        setCellRunStatuses(prev => ({ ...prev, [cell.id]: "simulated" }));
+        setRunningCells(prev => ({ ...prev, [cell.id]: false }));
+        completed += 1;
       }
 
-      if (failure) {
-        setBatchRunState({
-          status: "error",
-          completed,
-          total: cellsToRun.length,
-          failedCellId: failure.cell.id,
-          error: failure.message,
-        });
-      } else {
-        setBatchRunState({ status: "success", completed, total: cellsToRun.length });
-      }
+      setBatchRunState({ status: "simulated", completed, total: cellsToRun.length });
     } finally {
       setIsBatchRunning(false);
+      setRunningCells(prev => {
+        const next = { ...prev };
+        for (const cell of cellsToRun) delete next[cell.id];
+        return next;
+      });
     }
   };
 
@@ -728,13 +644,23 @@ export default function Home() {
           </section>
         ) : (
           <div className="notebook-content">
+            <section
+              className="rounded-md border border-primary/25 bg-primary/5 p-4 text-sm"
+              role="note"
+              data-testid="notice-simulation-mode"
+            >
+              <p className="font-semibold">Режим симуляции — код не запускается</p>
+              <p className="mt-1 text-muted-foreground">
+                Кнопки показывают порядок ячеек и пропуск выключенных. Новые результаты не создаются, Colab для этого не нужен.
+              </p>
+            </section>
             <section className="notebook-document-toolbar">
               <div>
                 <p className="notebook-eyebrow">РАБОЧАЯ ОБЛАСТЬ</p>
                 <h2>Блокнот готов</h2>
                 <p>Ячеек: {notebook.cells.length} · результат и параметры доступны ниже</p>
                 <p className="notebook-cell-toggle-note">
-                  Отключённые ячейки пропускаются при запуске. При желании сохраняйте их состояние отдельно от .ipynb.
+                  Отключённые ячейки пропускаются в симуляции. При желании сохраняйте их состояние отдельно от .ipynb.
                 </p>
                 <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
                   <div className="flex items-center gap-2">
@@ -766,7 +692,7 @@ export default function Home() {
                   {isBatchRunning
                     ? <Loader2 className="w-4 h-4 mr-2 animate-spin" aria-hidden="true" />
                     : <Play className="w-4 h-4 mr-2" aria-hidden="true" />}
-                  Запустить включённые ячейки
+                  Симулировать включённые ячейки
                 </Button>
                 <Input
                   type="file"
@@ -798,20 +724,14 @@ export default function Home() {
               >
                 {batchRunState.status === "running" && (
                   <p>
-                    Выполняется ячейка {batchRunState.cellNumber} — {batchRunState.position} из {batchRunState.total}.
+                    Симуляция: ячейка {batchRunState.cellNumber} — шаг {batchRunState.position} из {batchRunState.total}. Код не запускается.
                   </p>
                 )}
-                {batchRunState.status === "success" && (
-                  <p>Последовательный запуск завершён: {batchRunState.completed} из {batchRunState.total} ячеек выполнено.</p>
-                )}
-                {batchRunState.status === "error" && (
-                  <p>
-                    Запуск остановлен на ячейке {notebook.cells.findIndex(cell => cell.id === batchRunState.failedCellId) + 1}
-                    {" "}после {batchRunState.completed} успешных ячеек. Следующие ячейки не запускались. {batchRunState.error}
-                  </p>
+                {batchRunState.status === "simulated" && (
+                  <p>Симуляция завершена: просмотрено {batchRunState.completed} из {batchRunState.total} включённых ячеек. Python-код не выполнялся.</p>
                 )}
                 {batchRunState.status === "empty" && (
-                  <p>Нет включённых кодовых или параметрических ячеек для запуска.</p>
+                  <p>Нет включённых кодовых или параметрических ячеек для симуляции.</p>
                 )}
               </section>
             )}
@@ -894,13 +814,30 @@ export default function Home() {
 
                         {cellResults[cell.id] !== undefined ? (
                           <div className="notebook-cell-output border-t p-4" data-testid={`result-live-${cell.id}`}>
-                            <pre className={`text-sm font-mono whitespace-pre-wrap ${cellRunStatuses[cell.id] === "error" ? "text-red-600 dark:text-red-400" : ""}`}>
+                            <Badge variant="outline" className="mb-3">Результат этой сессии — симуляция его не обновляла</Badge>
+                            <pre className="text-sm font-mono whitespace-pre-wrap">
                               {outputText(cellResults[cell.id])}
                             </pre>
                           </div>
                         ) : cell.outputs.length > 0 ? (
-                          <div className="notebook-cell-output border-t p-4">
+                          <div className="notebook-cell-output border-t p-4" data-testid={`saved-results-${cell.id}`}>
+                            <div className="mb-3">
+                              <Badge variant="outline" data-testid={`badge-saved-output-${cell.id}`}>
+                                Сохранённый результат из исходного .ipynb
+                              </Badge>
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                Симуляция не пересчитывает и не обновляет этот вывод.
+                              </p>
+                            </div>
                             <NotebookOutputs outputs={cell.outputs} cellId={cell.id} />
+                          </div>
+                        ) : cellRunStatuses[cell.id] === "simulated" ? (
+                          <div
+                            className="notebook-cell-output border-t p-4 text-sm text-muted-foreground"
+                            role="note"
+                            data-testid={`simulation-no-output-${cell.id}`}
+                          >
+                            Ячейка пройдена в симуляции. Код не выполнялся, нового результата нет.
                           </div>
                         ) : null}
                       </div>

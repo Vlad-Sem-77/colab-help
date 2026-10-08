@@ -139,58 +139,37 @@ test("restores opted-in cell settings after reload and lets the user reset them"
   await expect(firstCodeCell).toHaveAttribute("data-state", "checked");
 });
 
-test("runs enabled parameter cells in order and skips disabled code cells", async ({ page }) => {
-  const parameterRequests: unknown[] = [];
-  const codeRequests: unknown[] = [];
-
-  await page.route("**/api/colab/run", async route => {
-    parameterRequests.push(route.request().postDataJSON());
-    await route.fulfill({
-      json: {
-        status: "ok",
-        taskType: "text_generation",
-        mode: "auto",
-        result: "parameter cell completed",
-        error: null,
-      },
-    });
-  });
-  await page.route("**/api/colab/execute", async route => {
-    codeRequests.push(route.request().postDataJSON());
-    await route.fulfill({ json: { status: "ok", stdout: "code completed", stderr: "" } });
+test("simulates enabled cells without requiring Colab or sending code", async ({ page }) => {
+  const colabRequests: string[] = [];
+  page.on("request", request => {
+    if (request.url().includes("/api/colab/execute") || request.url().includes("/api/colab/run")) {
+      colabRequests.push(request.url());
+    }
   });
 
-  await page.getByTestId("input-colab-url").fill("https://example.trycloudflare.com");
   await page.getByTestId("input-upload-notebook").setInputFiles(notebookFixture);
   await page.getByTestId("switch-cell-enabled-2").click();
   await page.getByTestId("button-run-enabled-cells").click();
 
   await expect(page.getByTestId("status-batch-run"))
-    .toContainText("Последовательный запуск завершён: 1 из 1");
-  await expect(page.getByTestId("status-cell-success-1")).toBeVisible();
+    .toContainText("Симуляция завершена: просмотрено 1 из 1");
+  await expect(page.getByTestId("status-cell-simulated-1")).toBeVisible();
   await expect(page.getByTestId("status-cell-skipped-2")).toBeVisible();
-  await expect(page.getByTestId("result-live-browser-parameters"))
-    .toContainText("parameter cell completed");
-  expect(parameterRequests).toHaveLength(1);
-  expect(codeRequests).toHaveLength(0);
+  await expect(page.getByTestId("simulation-no-output-browser-parameters"))
+    .toContainText("Код не выполнялся");
+  await expect(page.getByTestId("badge-saved-output-saved-result"))
+    .toContainText("Сохранённый результат из исходного .ipynb");
+  expect(colabRequests).toEqual([]);
 });
 
-test("stops after the first error and shows it on the failed cell", async ({ page }) => {
-  const executedSources: string[] = [];
-  await page.route("**/api/colab/execute", async route => {
-    const { code } = route.request().postDataJSON();
-    executedSources.push(code);
-    if (code.includes("raise")) {
-      await route.fulfill({
-        status: 502,
-        json: { status: "error", stdout: "", stderr: "ValueError: invalid input" },
-      });
-      return;
+test("simulation does not claim to catch runtime errors or fabricate outputs", async ({ page }) => {
+  const colabRequests: string[] = [];
+  page.on("request", request => {
+    if (request.url().includes("/api/colab/execute") || request.url().includes("/api/colab/run")) {
+      colabRequests.push(request.url());
     }
-    await route.fulfill({ json: { status: "ok", stdout: "first completed", stderr: "" } });
   });
 
-  await page.getByTestId("input-colab-url").fill("https://example.trycloudflare.com");
   await page.getByTestId("input-upload-notebook").setInputFiles({
     name: "batch-run.ipynb",
     mimeType: "application/json",
@@ -207,19 +186,15 @@ test("stops after the first error and shows it on the failed cell", async ({ pag
   await page.getByTestId("button-run-enabled-cells").click();
 
   await expect(page.getByTestId("status-batch-run"))
-    .toContainText("Запуск остановлен на ячейке 2");
-  await expect(page.getByTestId("status-batch-run"))
-    .toContainText("Следующие ячейки не запускались");
-  await expect(page.getByTestId("status-cell-success-0")).toBeVisible();
-  await expect(page.getByTestId("status-cell-error-1")).toBeVisible();
-  await expect(page.getByTestId("result-live-failed"))
-    .toContainText("ValueError: invalid input");
-  await expect(page.getByTestId("status-cell-success-2")).toHaveCount(0);
+    .toContainText("Симуляция завершена: просмотрено 3 из 3");
+  await expect(page.getByTestId("status-cell-simulated-0")).toBeVisible();
+  await expect(page.getByTestId("status-cell-simulated-1")).toBeVisible();
+  await expect(page.getByTestId("status-cell-simulated-2")).toBeVisible();
+  await expect(page.getByTestId("status-cell-error-1")).toHaveCount(0);
+  await expect(page.getByTestId("simulation-no-output-failed"))
+    .toContainText("Код не выполнялся");
   await expect(page.getByTestId("status-cell-skipped-3")).toBeVisible();
-  expect(executedSources).toEqual([
-    "print('first')",
-    "raise ValueError('invalid input')",
-  ]);
+  expect(colabRequests).toEqual([]);
 });
 
 test("keeps the loaded notebook within a mobile viewport", async ({ page }) => {

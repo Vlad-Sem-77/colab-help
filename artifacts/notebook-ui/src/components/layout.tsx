@@ -68,7 +68,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
                   <Settings className="w-4 h-4" />
-                  <span>Colab Connection</span>
+                  <span>Colab для ИИ</span>
                 </div>
                 {pingStatus === "ok" && <Wifi className="w-4 h-4 text-green-500" />}
                 {pingStatus === "err" && <WifiOff className="w-4 h-4 text-red-500" />}
@@ -98,12 +98,18 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   {pingMutation.isPending ? "Проверка..." : pingStatus === "ok" ? "ONLINE — PING" : "PING"}
                 </Button>
               </div>
+              <p
+                className="text-xs leading-relaxed text-muted-foreground"
+                data-testid="notice-colab-optional"
+              >
+                Симуляция ячеек работает без Colab. Подключение нужно только для онлайн-помощника.
+              </p>
             </div>
           </div>
           <a className="notebook-download-colab" href="/api/colab/notebook" download="colab_backend.ipynb">
             <Button variant="outline" size="sm" className="w-full text-xs gap-1.5">
               <Download className="w-3 h-3" />
-              Скачать Colab-ноутбук
+              Скачать служебный Colab-ноутбук
             </Button>
           </a>
         </div>
