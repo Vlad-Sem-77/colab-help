@@ -11,6 +11,12 @@ Provider chat model IDs must come from each provider's catalog. Users manually c
 
 **How to apply:** Keep file reading, local search, and simulation usable without provider keys. Keep credentials in server session memory, use an HttpOnly session cookie, and never place keys in URLs, browser storage, database records, or logs. Keep notebook and audio uploads opt-in; audio must remain transient and must not be persisted. Keep AI separate from cell execution. If describing the separate Colab bridge artifact, do not present its tunnel URL as Google-account authorization.
 
+AI-generated cell explanations are an optional, explicit in-app annotation layer. Require both a connected provider/model and the user's online-analysis consent before sending notebook content; do not modify the source `.ipynb` or its exported cells.
+
+**Why:** The user wants AI-authored explanations in notebook cells while preserving the original executable code and avoiding unannounced data transfer.
+
+**How to apply:** Generate explanations only after an explicit action under consent, render them alongside the cell source, and keep them separate from notebook export unless the user explicitly asks for an export feature.
+
 ## Product direction
 
 The user wants the AI teacher to remain online; installing a local AI model is too expensive and complicated. Actual Python execution on the user's device is a later phase.

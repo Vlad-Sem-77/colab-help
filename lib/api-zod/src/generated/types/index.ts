@@ -6,6 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './aiCellExplanation';
+export * from './aiCellExplanationsInput';
+export * from './aiCellExplanationsInputProfile';
+export * from './aiCellExplanationsResult';
 export * from './aiCredentialConnectInput';
 export * from './aiCredentialConnectResult';
 export * from './aiModel';

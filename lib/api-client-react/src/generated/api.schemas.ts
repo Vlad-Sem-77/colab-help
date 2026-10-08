@@ -193,6 +193,46 @@ export interface AiNotebookAnalysisResult {
   sources: number[];
 }
 
+export type AiCellExplanationsInputProfile = typeof AiCellExplanationsInputProfile[keyof typeof AiCellExplanationsInputProfile];
+
+
+export const AiCellExplanationsInputProfile = {
+  review: 'review',
+  economy: 'economy',
+} as const;
+
+export interface AiCellExplanationsInput {
+  providerId: AiProviderId;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  modelId: string;
+  profile: AiCellExplanationsInputProfile;
+  /**
+     * @minLength 1
+     * @maxLength 32000
+     */
+  notebookContext: string;
+}
+
+export interface AiCellExplanation {
+  /** @minimum 0 */
+  cellIndex: number;
+  /**
+     * @minLength 1
+     * @maxLength 1600
+     */
+  explanation: string;
+}
+
+export interface AiCellExplanationsResult {
+  providerId: AiProviderId;
+  modelId: string;
+  /** @maxItems 500 */
+  explanations: AiCellExplanation[];
+}
+
 export interface AiCredentialConnectInput {
   providerId: AiProviderId;
   /**

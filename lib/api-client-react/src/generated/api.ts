@@ -25,6 +25,8 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AiCellExplanationsInput,
+  AiCellExplanationsResult,
   AiCredentialConnectInput,
   AiCredentialConnectResult,
   AiModelsResult,
@@ -829,6 +831,95 @@ export const useAnalyzeNotebookWithAi = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getAnalyzeNotebookWithAiMutationOptions(options), queryClient);
+    }
+
+export const getExplainNotebookCellsWithAiUrl = () => {
+
+
+
+
+  return `/api/ai/explain-notebook-cells`
+}
+
+/**
+ * Sends notebook text to the selected provider only after explicit user consent; cell code is never executed
+ * @summary Generate explanations for notebook cells with a selected provider model
+ */
+export const explainNotebookCellsWithAi = async (aiCellExplanationsInput: AiCellExplanationsInput, options?: Parameters<typeof customFetch>[1]): Promise<AiCellExplanationsResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AiCellExplanationsResult>(getExplainNotebookCellsWithAiUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(aiCellExplanationsInput)
+  }
+);}
+
+
+
+
+
+export const getExplainNotebookCellsWithAiMutationKey = () => ['explainNotebookCellsWithAi'] as const;
+
+export const getExplainNotebookCellsWithAiMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof explainNotebookCellsWithAi>>, TError,ExplainNotebookCellsWithAiMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof explainNotebookCellsWithAi>>, TError,ExplainNotebookCellsWithAiMutationVariables, TContext> => {
+
+const mutationKey = getExplainNotebookCellsWithAiMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof explainNotebookCellsWithAi>>, ExplainNotebookCellsWithAiMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  explainNotebookCellsWithAi(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ExplainNotebookCellsWithAiMutationResult = NonNullable<Awaited<ReturnType<typeof explainNotebookCellsWithAi>>>
+    export type ExplainNotebookCellsWithAiMutationBody = BodyType<AiCellExplanationsInput>
+    export type ExplainNotebookCellsWithAiMutationError = ErrorType<void>
+    export type ExplainNotebookCellsWithAiMutationVariables = {data: BodyType<AiCellExplanationsInput>}
+
+    /**
+ * @summary Generate explanations for notebook cells with a selected provider model
+ */
+export const useExplainNotebookCellsWithAi = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof explainNotebookCellsWithAi>>, TError,ExplainNotebookCellsWithAiMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof explainNotebookCellsWithAi>>,
+        TError,
+        ExplainNotebookCellsWithAiMutationVariables,
+        TContext
+      > => {
+      return useMutation(getExplainNotebookCellsWithAiMutationOptions(options), queryClient);
     }
 
 export const getConnectAiCredentialUrl = () => {

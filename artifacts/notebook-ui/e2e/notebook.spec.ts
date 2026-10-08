@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 
 const notebookFixture = fileURLToPath(
@@ -197,6 +198,68 @@ test("uploads notebook text, parameters and saved results with the notebook help
     .toContainText("Объясняет источник или подготовку входных данных");
   await expect(page.getByTestId("message-notebook-assistant-1"))
     .not.toContainText("Этот текст описывает подготовку данных.");
+});
+
+test("adds consented AI explanations to notebook cells without changing the exported source", async ({ page }) => {
+  let submittedContext = "";
+  let submittedModelId = "";
+  await page.route("**/api/ai/explain-notebook-cells", async (route) => {
+    const request = route.request().postDataJSON() as {
+      providerId: string;
+      modelId: string;
+      notebookContext: string;
+    };
+    submittedContext = request.notebookContext;
+    submittedModelId = request.modelId;
+    await route.fulfill({
+      json: {
+        providerId: request.providerId,
+        modelId: request.modelId,
+        explanations: [
+          { cellIndex: 0, explanation: "ИИ-пояснение: цель и первый шаг обработки." },
+          { cellIndex: 1, explanation: "ИИ поясняет доступные параметры ноутбука." },
+        ],
+      },
+    });
+  });
+
+  await page.getByTestId("input-upload-notebook").setInputFiles(notebookFixture);
+  const explainButton = page.getByTestId("button-explain-cells-with-ai");
+  await expect(explainButton).toBeDisabled();
+
+  await page.getByTestId("input-ai-provider-key").fill("test-cell-explanations-key");
+  await page.getByTestId("button-use-ai-provider-key").click();
+  await expect(page.getByTestId("text-ai-session-key-active")).toBeVisible();
+  await page.getByTestId("checkbox-notebook-ai-consent").click();
+  await expect(explainButton).toBeEnabled();
+  await explainButton.click();
+
+  await expect(page.getByTestId("status-ai-cell-explanations"))
+    .toContainText("пояснила 2 из 3 ячеек");
+  await expect(page.getByTestId("text-cell-explanation-0"))
+    .toContainText("ИИ-пояснение: цель и первый шаг обработки.");
+  await expect(page.getByTestId("text-ai-cell-explanation-source-0"))
+    .toContainText(submittedModelId);
+  await expect(page.getByTestId("text-cell-explanation-2"))
+    .toContainText("Смысл ячейки:");
+  expect(submittedContext).toContain("[Ячейка 3 · code]");
+  expect(submittedContext).toContain("Сохранённый результат: 12 строк");
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByTestId("button-download-notebook").click();
+  const download = await downloadPromise;
+  const downloadPath = await download.path();
+  expect(downloadPath).toBeTruthy();
+  const exportedNotebook = JSON.parse(await readFile(downloadPath!, "utf8"));
+  expect(exportedNotebook.cells[0].source).toEqual([
+    "# Анализ продаж\n",
+    "\n",
+    "Этот текст описывает подготовку данных.",
+  ]);
+  expect(exportedNotebook.cells[1].source).toEqual([
+    'prompt = "Опиши результат анализа"\n',
+    "temperature = 0.7",
+  ]);
 });
 
 test("keeps the provider key in the server browser session and supports voice questions and spoken answers", async ({ page }) => {

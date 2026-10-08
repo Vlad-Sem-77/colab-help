@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Upload, Play, Download, Code, FileText, Settings2, Loader2, SkipForward, RotateCcw, CheckCircle2 } from "lucide-react";
+import { Upload, Play, Download, Code, FileText, Settings2, Loader2, SkipForward, RotateCcw, CheckCircle2, Sparkles } from "lucide-react";
 import "./notebook-theme.css";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -13,7 +13,12 @@ import { useToast } from "@/hooks/use-toast";
 import { buildNotebookContext } from "@/lib/notebook-context";
 import { NotebookAssistant } from "@/components/notebook-assistant";
 import { AiProviderSettings } from "@/components/ai-provider-settings";
-import { getListAiProvidersQueryKey, useListAiModels, useListAiProviders } from "@workspace/api-client-react";
+import {
+  getListAiProvidersQueryKey,
+  useExplainNotebookCellsWithAi,
+  useListAiModels,
+  useListAiProviders,
+} from "@workspace/api-client-react";
 import type { AiSettings } from "@/lib/ai-settings";
 import { getDefaultAiModelId, getSelectableAiModels } from "@/lib/ai-model-selection";
 import {
@@ -370,6 +375,16 @@ export default function Home() {
   const [notebookRevision, setNotebookRevision] = useState(0);
   const [aiSettings, setAiSettings] = useState<AiSettings>(readSavedAiSettings);
   const [allowOnlineAi, setAllowOnlineAi] = useState(false);
+  const [aiCellExplanations, setAiCellExplanations] = useState<Record<number, string>>({});
+  const [aiCellExplanationModel, setAiCellExplanationModel] = useState("");
+  const [aiCellExplanationStatus, setAiCellExplanationStatus] = useState<{
+    explained: number;
+    total: number;
+  } | null>(null);
+  const [aiCellExplanationError, setAiCellExplanationError] = useState<string | null>(null);
+  const [isExplainingCells, setIsExplainingCells] = useState(false);
+  const cellExplanationRequestId = useRef(0);
+  const explainNotebookCells = useExplainNotebookCellsWithAi();
   const queryClient = useQueryClient();
   const aiProvidersQuery = useListAiProviders({ query: { staleTime: 60_000 } });
   const selectedAiProvider = aiProvidersQuery.data?.providers.find(
@@ -440,6 +455,14 @@ export default function Home() {
   const handleAiSettingsChange = (nextSettings: AiSettings) => {
     if (nextSettings.providerId !== aiSettings.providerId) {
       setAllowOnlineAi(false);
+    }
+    if (
+      nextSettings.providerId !== aiSettings.providerId
+      || nextSettings.profile !== aiSettings.profile
+      || getActiveAiModelId(nextSettings) !== getActiveAiModelId(aiSettings)
+    ) {
+      cellExplanationRequestId.current += 1;
+      setIsExplainingCells(false);
     }
     setAiSettings(nextSettings);
   };
@@ -537,6 +560,12 @@ export default function Home() {
         setCellEnabledState(savedState ?? createCellEnabledState(parsed.cells));
         setRememberCellSettings(savedState !== null);
         setNotebookRevision(revision => revision + 1);
+        cellExplanationRequestId.current += 1;
+        setAiCellExplanations({});
+        setAiCellExplanationModel("");
+        setAiCellExplanationStatus(null);
+        setAiCellExplanationError(null);
+        setIsExplainingCells(false);
         setCellValues({});
         setCellResults({});
         setCellRunStatuses({});
@@ -717,6 +746,46 @@ export default function Home() {
     URL.revokeObjectURL(url);
   };
 
+  const handleExplainNotebookCells = async () => {
+    if (!notebook || !aiReady || !allowOnlineAi || !notebookContext.trim() || isExplainingCells) return;
+
+    const requestId = ++cellExplanationRequestId.current;
+    setAiCellExplanationError(null);
+    setIsExplainingCells(true);
+    try {
+      const result = await explainNotebookCells.mutateAsync({
+        data: {
+          providerId: aiSettings.providerId,
+          modelId: activeAiModelId,
+          profile: aiSettings.profile,
+          notebookContext,
+        },
+      });
+      if (requestId !== cellExplanationRequestId.current) return;
+      const nextExplanations = Object.fromEntries(
+        result.explanations.map(({ cellIndex, explanation }) => [cellIndex, explanation]),
+      );
+      if (Object.keys(nextExplanations).length === 0) {
+        throw new Error("Модель не вернула пояснения ячеек.");
+      }
+      setAiCellExplanations(nextExplanations);
+      setAiCellExplanationModel(result.modelId);
+      setAiCellExplanationStatus({
+        explained: Object.keys(nextExplanations).length,
+        total: notebook.cells.length,
+      });
+    } catch (error) {
+      if (requestId !== cellExplanationRequestId.current) return;
+      setAiCellExplanationError(
+        error instanceof Error && error.message.trim()
+          ? error.message
+          : "Не удалось получить пояснения. Проверьте подключение ИИ и попробуйте ещё раз.",
+      );
+    } finally {
+      if (requestId === cellExplanationRequestId.current) setIsExplainingCells(false);
+    }
+  };
+
   return (
     <div className="notebook-page" data-notebook-theme={theme} data-testid="page-notebook">
       <div className="notebook-page-inner">
@@ -819,6 +888,19 @@ export default function Home() {
                 )}
               </section>
             )}
+            {aiCellExplanationStatus && (
+              <p className="text-sm text-muted-foreground" role="status" data-testid="status-ai-cell-explanations">
+                ИИ-модель {aiCellExplanationModel} пояснила {aiCellExplanationStatus.explained} из {aiCellExplanationStatus.total} ячеек.
+                {aiCellExplanationStatus.explained < aiCellExplanationStatus.total
+                  ? " Для остальных показаны локальные пояснения."
+                  : " Эти пояснения видны только в приложении и не записаны в исходный .ipynb."}
+              </p>
+            )}
+            {aiCellExplanationError && (
+              <p className="text-sm text-destructive" role="alert" data-testid="alert-ai-cell-explanations">
+                {aiCellExplanationError}
+              </p>
+            )}
 
             <AiProviderSettings
               settings={aiSettings}
@@ -843,6 +925,20 @@ export default function Home() {
               allowOnlineAi={allowOnlineAi}
               onAllowOnlineAiChange={setAllowOnlineAi}
             />
+
+            <div className="flex justify-end">
+              <Button
+                variant="outline"
+                onClick={() => void handleExplainNotebookCells()}
+                disabled={!aiReady || !allowOnlineAi || isExplainingCells || !notebookContext.trim()}
+                data-testid="button-explain-cells-with-ai"
+              >
+                {isExplainingCells
+                  ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                  : <Sparkles className="mr-2 h-4 w-4" aria-hidden="true" />}
+                {isExplainingCells ? "ИИ поясняет ячейки…" : "Пояснить ячейки с ИИ"}
+              </Button>
+            </div>
 
             <div className="notebook-cell-list">
               {notebook.cells.map((cell, index) => {
@@ -913,9 +1009,14 @@ export default function Home() {
                               data-testid={`text-cell-explanation-${index}`}
                             >
                               <span className="font-medium text-foreground">Смысл ячейки: </span>
-                              {explainNotebookCell(cell, index, notebook)}
+                              {aiCellExplanations[index] ?? explainNotebookCell(cell, index, notebook)}
                             </p>
-                            {libraryExplanations.length > 0 && (
+                            {aiCellExplanations[index] && (
+                              <p className="mt-2 text-xs text-muted-foreground" data-testid={`text-ai-cell-explanation-source-${index}`}>
+                                Пояснение ИИ · {aiCellExplanationModel}
+                              </p>
+                            )}
+                            {libraryExplanations.length > 0 && !aiCellExplanations[index] && (
                               <div className="mt-2" data-testid={`list-import-explanations-${index}`}>
                                 <p className="m-0 font-medium text-foreground">
                                   Зачем здесь эти библиотеки

@@ -197,6 +197,34 @@ paths:
         "502":
           description: Provider request failed
 
+  /ai/explain-notebook-cells:
+    post:
+      operationId: explainNotebookCellsWithAi
+      tags: [ai]
+      summary: Generate explanations for notebook cells with a selected provider model
+      description: Sends notebook text to the selected provider only after explicit user consent; cell code is never executed
+      security:
+        - AiSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiCellExplanationsInput"
+      responses:
+        "200":
+          description: Generated cell explanations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiCellExplanationsResult"
+        "400":
+          description: Invalid request
+        "409":
+          description: Session key is missing or model is unavailable
+        "502":
+          description: Provider request failed or returned invalid explanations
+
   /ai/credentials/connect:
     post:
       operationId: connectAiCredential
@@ -609,6 +637,50 @@ components:
           items:
             type: integer
             minimum: 0
+
+    AiCellExplanationsInput:
+      type: object
+      required: [providerId, modelId, profile, notebookContext]
+      properties:
+        providerId:
+          $ref: "#/components/schemas/AiProviderId"
+        modelId:
+          type: string
+          minLength: 1
+          maxLength: 200
+        profile:
+          type: string
+          enum: [review, economy]
+        notebookContext:
+          type: string
+          minLength: 1
+          maxLength: 32000
+
+    AiCellExplanation:
+      type: object
+      required: [cellIndex, explanation]
+      properties:
+        cellIndex:
+          type: integer
+          minimum: 0
+        explanation:
+          type: string
+          minLength: 1
+          maxLength: 1600
+
+    AiCellExplanationsResult:
+      type: object
+      required: [providerId, modelId, explanations]
+      properties:
+        providerId:
+          $ref: "#/components/schemas/AiProviderId"
+        modelId:
+          type: string
+        explanations:
+          type: array
+          maxItems: 500
+          items:
+            $ref: "#/components/schemas/AiCellExplanation"
 
     AiCredentialConnectInput:
       type: object

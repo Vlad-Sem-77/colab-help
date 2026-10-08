@@ -208,6 +208,41 @@ export const AnalyzeNotebookWithAiResponse = zod.object({
 
 
 /**
+ * Sends notebook text to the selected provider only after explicit user consent; cell code is never executed
+ * @summary Generate explanations for notebook cells with a selected provider model
+ */
+export const explainNotebookCellsWithAiBodyModelIdMax = 200;
+
+export const explainNotebookCellsWithAiBodyNotebookContextMax = 32000;
+
+
+
+export const ExplainNotebookCellsWithAiBody = zod.object({
+  "providerId": zod.enum(['aitunnel', 'proxyapi', 'routerai', 'openai']),
+  "modelId": zod.string().min(1).max(explainNotebookCellsWithAiBodyModelIdMax),
+  "profile": zod.enum(['review', 'economy']),
+  "notebookContext": zod.string().min(1).max(explainNotebookCellsWithAiBodyNotebookContextMax)
+})
+
+export const explainNotebookCellsWithAiResponseExplanationsItemCellIndexMin = 0;
+
+export const explainNotebookCellsWithAiResponseExplanationsItemExplanationMax = 1600;
+
+export const explainNotebookCellsWithAiResponseExplanationsMax = 500;
+
+
+
+export const ExplainNotebookCellsWithAiResponse = zod.object({
+  "providerId": zod.enum(['aitunnel', 'proxyapi', 'routerai', 'openai']),
+  "modelId": zod.string(),
+  "explanations": zod.array(zod.object({
+  "cellIndex": zod.number().int().min(explainNotebookCellsWithAiResponseExplanationsItemCellIndexMin),
+  "explanation": zod.string().min(1).max(explainNotebookCellsWithAiResponseExplanationsItemExplanationMax)
+})).max(explainNotebookCellsWithAiResponseExplanationsMax)
+})
+
+
+/**
  * Verifies the key against the provider model catalog and stores it only in server memory for up to 12 hours
  * @summary Verify and connect a provider key for this browser session
  */
