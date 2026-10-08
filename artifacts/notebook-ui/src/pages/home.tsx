@@ -253,6 +253,7 @@ function ParameterWidget({
           onChange={e => onChange(e.target.value)} 
           className="font-mono text-sm min-h-[100px]"
           disabled={disabled}
+          data-testid={`parameter-${param.varName}`}
         />
       </div>
     );
@@ -270,6 +271,7 @@ function ParameterWidget({
           value={[value ?? param.defaultValue]} 
           onValueChange={v => onChange(v[0])} 
           disabled={disabled}
+          data-testid={`parameter-${param.varName}`}
         />
       </div>
     );
@@ -287,6 +289,7 @@ function ParameterWidget({
           value={[value ?? param.defaultValue]} 
           onValueChange={v => onChange(v[0])} 
           disabled={disabled}
+          data-testid={`parameter-${param.varName}`}
         />
       </div>
     );
@@ -300,6 +303,7 @@ function ParameterWidget({
           checked={value ?? param.defaultValue} 
           onCheckedChange={onChange} 
           disabled={disabled}
+          data-testid={`parameter-${param.varName}`}
         />
       </div>
     );
@@ -310,7 +314,7 @@ function ParameterWidget({
       <div className="space-y-1.5">
         <label className="text-xs font-medium font-mono text-muted-foreground">{param.varName}</label>
         <Select value={value ?? param.defaultValue} onValueChange={onChange} disabled={disabled}>
-          <SelectTrigger disabled={disabled}>
+          <SelectTrigger disabled={disabled} data-testid={`parameter-${param.varName}`}>
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -332,6 +336,7 @@ function ParameterWidget({
         onChange={e => onChange(e.target.value)} 
         className="font-mono text-sm"
         disabled={disabled}
+        data-testid={`parameter-${param.varName}`}
       />
     </div>
   );
