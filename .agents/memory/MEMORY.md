@@ -1,2 +1,2 @@
-- [Notebook reader model availability](notebook-reader-model.md) — only call the reader AI-powered when a provider is configured; keep source-grounded local answers transparent meanwhile.
+- [Notebook reader model availability](notebook-reader-model.md) — AI teacher stays online; simulation comes before local Python execution, and local answers must stay transparent.
 - [Notebook themes](notebook-themes.md) — keep both Light Waves and Windows 95 available as user-selectable Notebook UI styles.
