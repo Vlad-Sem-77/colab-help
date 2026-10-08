@@ -1,1 +1,2 @@
 - [Notebook reader model availability](notebook-reader-model.md) — only call the reader AI-powered when a provider is configured; keep source-grounded local answers transparent meanwhile.
+- [Notebook themes](notebook-themes.md) — keep both Light Waves and Windows 95 available as user-selectable Notebook UI styles.

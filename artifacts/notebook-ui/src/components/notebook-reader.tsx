@@ -145,7 +145,7 @@ export function NotebookReader({ notebook, notebookContext, colabUrl }: Notebook
   ];
 
   return (
-    <section className="grid gap-4 lg:grid-cols-2" aria-label="Помощник по ноутбуку">
+    <section className="notebook-reader-panels grid gap-4 lg:grid-cols-2" aria-label="Помощник по ноутбуку">
       <Card data-testid="card-notebook-analysis">
         <CardHeader className="pb-3">
           <div className="flex items-start justify-between gap-3">

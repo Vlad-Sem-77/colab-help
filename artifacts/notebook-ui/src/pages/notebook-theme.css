@@ -1,0 +1,1106 @@
+html[data-notebook-theme="light-waves"] body {
+  background: #f4f6f1;
+  color: #34433f;
+  font-family: "DM Sans", "Avenir Next", Inter, sans-serif;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-app-shell {
+  background: #f4f6f1 !important;
+  color: #34433f !important;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-sidebar {
+  background: #fafbf8 !important;
+  border-color: #e0e6de !important;
+  color: #52645a;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-brand {
+  border-color: #e0e6de !important;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-brand h1 {
+  color: #33443d;
+  font-family: "DM Sans", "Avenir Next", Inter, sans-serif;
+  letter-spacing: -0.04em;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-nav-link {
+  border-radius: 12px;
+  color: #708079 !important;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-nav-link:hover,
+html[data-notebook-theme="light-waves"] .notebook-nav-link.bg-primary\/10 {
+  background: #e9f1ec !important;
+  color: #35654d !important;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-connect-panel {
+  border-color: #e0e6de !important;
+  background: #f0f4ef !important;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-connect-panel input {
+  border-color: #dce4dc;
+  background: #fffefa;
+  color: #34433f;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-connect-panel button {
+  background: #739a8b;
+  color: white;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-download-colab button {
+  border-color: #d9e4dd;
+  background: #fafbf8;
+  color: #456e61;
+}
+
+html[data-notebook-theme="windows95"] body {
+  background: #b9b9b9;
+  color: #202020;
+  font-family: Tahoma, "MS Sans Serif", sans-serif;
+}
+
+html[data-notebook-theme="windows95"] .notebook-app-shell {
+  background: #b9b9b9 !important;
+  color: #202020 !important;
+}
+
+html[data-notebook-theme="windows95"] .notebook-sidebar {
+  background: #c6c6c6 !important;
+  border-color: #777 !important;
+  color: #222;
+}
+
+html[data-notebook-theme="windows95"] .notebook-brand {
+  border-color: #888 !important;
+  box-shadow: 0 1px #fff;
+}
+
+html[data-notebook-theme="windows95"] .notebook-brand h1 {
+  color: #202020;
+  font-family: Tahoma, "MS Sans Serif", sans-serif;
+  letter-spacing: 0;
+}
+
+html[data-notebook-theme="windows95"] .notebook-nav-link {
+  border-radius: 0;
+  color: #333 !important;
+}
+
+html[data-notebook-theme="windows95"] .notebook-nav-link:hover,
+html[data-notebook-theme="windows95"] .notebook-nav-link.bg-primary\/10 {
+  background: #000080 !important;
+  color: white !important;
+}
+
+html[data-notebook-theme="windows95"] .notebook-connect-panel {
+  border-color: #888 !important;
+  background: #c6c6c6 !important;
+}
+
+html[data-notebook-theme="windows95"] .notebook-connect-panel input {
+  border: 1px solid #777;
+  border-top-color: #444;
+  border-left-color: #444;
+  border-radius: 0;
+  background: white;
+  color: #202020;
+}
+
+html[data-notebook-theme="windows95"] .notebook-connect-panel button,
+html[data-notebook-theme="windows95"] .notebook-download-colab button {
+  border: 1px solid;
+  border-color: white #555 #555 white;
+  border-radius: 0;
+  background: #c6c6c6;
+  color: #202020;
+  box-shadow: 1px 1px 0 #fff inset;
+}
+
+.notebook-page {
+  min-height: 100%;
+  padding: 30px clamp(16px, 4vw, 48px) 48px;
+  transition: background-color 180ms ease, color 180ms ease;
+}
+
+.notebook-page-inner {
+  width: min(100%, 1080px);
+  margin-inline: auto;
+}
+
+.notebook-page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  margin: 0 auto 30px;
+}
+
+.notebook-page-brand {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 14px;
+}
+
+.notebook-brand-icon {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 15px;
+}
+
+.notebook-brand-icon svg {
+  width: 21px;
+  height: 21px;
+}
+
+.notebook-eyebrow {
+  margin: 0;
+  font-size: 10px;
+  font-weight: 650;
+  letter-spacing: 0.13em;
+  line-height: 1.5;
+}
+
+.notebook-page-brand h1 {
+  margin: 2px 0 0;
+  font-size: clamp(23px, 3vw, 31px);
+  font-weight: 650;
+  line-height: 1.15;
+}
+
+.notebook-page-subtitle {
+  margin: 5px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.notebook-theme-control {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+}
+
+.notebook-theme-control button {
+  display: inline-flex;
+  min-height: 37px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 12px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+.notebook-theme-control button svg {
+  width: 15px;
+  height: 15px;
+}
+
+.notebook-theme-control button:focus-visible {
+  outline: 2px solid #739a8b;
+  outline-offset: 2px;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-page {
+  --background: 96 24% 96%;
+  --foreground: 150 13% 24%;
+  --card: 60 100% 99%;
+  --card-foreground: 150 13% 24%;
+  --popover: 60 100% 99%;
+  --popover-foreground: 150 13% 24%;
+  --muted: 100 20% 94%;
+  --muted-foreground: 145 8% 48%;
+  --border: 105 15% 89%;
+  --input: 105 15% 89%;
+  --primary: 153 17% 53%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 100 20% 94%;
+  --secondary-foreground: 150 13% 24%;
+  --accent: 100 20% 94%;
+  --accent-foreground: 150 13% 24%;
+  --ring: 153 17% 53%;
+  --radius: 1.25rem;
+  color: #34433f;
+  background:
+    radial-gradient(ellipse at 84% 4%, rgba(224, 237, 225, 0.66), transparent 33rem),
+    #f4f6f1;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-brand-icon {
+  background: #e4ede4;
+  color: #648579;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-eyebrow {
+  color: #87958d;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-page-brand h1 {
+  color: #33443d;
+  letter-spacing: -0.045em;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-page-subtitle {
+  color: #839089;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-theme-control {
+  border: 1px solid #e0e6de;
+  border-radius: 999px;
+  background: #fafbf8;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-theme-control button {
+  border-radius: 999px;
+  color: #708079;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-theme-control button[aria-pressed="true"] {
+  border-color: #d8e4da;
+  background: #e9f1ec;
+  color: #35654d;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-upload-card,
+html[data-notebook-theme="light-waves"] .notebook-document-toolbar,
+html[data-notebook-theme="light-waves"] .notebook-cell {
+  border: 1px solid #e3e9e1;
+  background: #fffefa;
+  box-shadow: 0 5px 20px rgba(61, 80, 67, 0.035);
+}
+
+html[data-notebook-theme="light-waves"] .notebook-upload-card {
+  display: flex;
+  width: min(100%, 600px);
+  min-height: 420px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin: 40px auto 0;
+  padding: 44px 34px;
+  border-radius: 26px;
+  text-align: center;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-upload-icon {
+  display: grid;
+  width: 56px;
+  height: 56px;
+  margin-bottom: 22px;
+  place-items: center;
+  border-radius: 19px;
+  background: #eaf1e8;
+  color: #648579;
+}
+
+.notebook-upload-icon svg {
+  width: 23px;
+  height: 23px;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-upload-card h2 {
+  margin: 9px 0 0;
+  color: #33443d;
+  font-size: 25px;
+  font-weight: 620;
+  letter-spacing: -0.035em;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-upload-description {
+  max-width: 420px;
+  margin: 12px 0 22px;
+  color: #75847c;
+  font-size: 13px;
+  line-height: 1.75;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-upload-button {
+  min-width: 205px;
+  border-radius: 999px;
+  background: #739a8b;
+  color: white;
+}
+
+.notebook-upload-button svg {
+  width: 17px;
+  height: 17px;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-upload-footnote {
+  margin: 14px 0 0;
+  color: #9aa79f;
+  font-size: 11px;
+}
+
+.notebook-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-document-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 22px;
+  border-radius: 19px;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-document-toolbar .notebook-eyebrow {
+  color: #87958d;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-document-toolbar h2 {
+  margin: 2px 0 0;
+  color: #33443d;
+  font-size: 18px;
+  font-weight: 620;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-document-toolbar p:last-child {
+  margin: 4px 0 0;
+  color: #839089;
+  font-size: 12px;
+}
+
+.notebook-document-actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-document-actions button {
+  min-height: 38px;
+  border-color: #d9e4dd;
+  border-radius: 999px;
+  background: #fafbf8;
+  color: #456e61;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-reader-panels {
+  color: #34433f;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-reader-panels [data-testid="card-notebook-analysis"],
+html[data-notebook-theme="light-waves"] .notebook-reader-panels [data-testid="card-notebook-questions"] {
+  border-color: #e3e9e1;
+  border-radius: 22px;
+  background: #fffefa;
+  color: #34433f;
+  box-shadow: 0 5px 20px rgba(61, 80, 67, 0.035);
+}
+
+.notebook-cell-list {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-cell-list::before {
+  position: absolute;
+  z-index: 0;
+  top: 12px;
+  bottom: 12px;
+  left: 27px;
+  border-left: 2px dotted #c9d9cd;
+  content: "";
+}
+
+html[data-notebook-theme="light-waves"] .notebook-cell {
+  position: relative;
+  z-index: 1;
+  overflow: hidden;
+  border-radius: 23px;
+  transition: box-shadow 180ms ease, border-color 180ms ease;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-cell:hover {
+  border-color: #d4e1d6;
+  box-shadow: 0 8px 24px rgba(61, 80, 67, 0.06);
+}
+
+html[data-notebook-theme="light-waves"] .notebook-cell-header {
+  min-height: 61px;
+  flex-wrap: wrap;
+  gap: 8px;
+  border-color: #e8ebe4;
+  background: transparent;
+  padding: 12px 20px;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-cell-header > div:first-child {
+  flex-wrap: wrap;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-cell-badge {
+  border: 0;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-cell-badge-markdown {
+  background: #f0f3ed !important;
+  color: #637c70 !important;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-cell-badge-parameter {
+  background: #fbf1e5 !important;
+  color: #a17445 !important;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-cell-badge-code {
+  background: #eaf1f0 !important;
+  color: #547b7a !important;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-cell-header [data-testid^="text-cell-execution-count"] {
+  color: #91a09a;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-cell-header .notebook-run-button {
+  min-height: 34px;
+  border: 1px solid #d9e4dd;
+  border-radius: 999px;
+  background: #f7faf6;
+  color: #456e61;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-cell-body {
+  padding: 20px 24px;
+  color: #52645a;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-cell-body .prose {
+  color: #75847c;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-code-source,
+html[data-notebook-theme="light-waves"] .notebook-parameter-source {
+  border-radius: 13px;
+  background: #f4f6f1;
+  color: #52645a;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-cell-explanation {
+  border-color: #e8ebe4;
+  color: #75847c;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-cell-explanation span {
+  color: #52645a;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-cell-output {
+  border-color: #e8ebe4;
+  background: #f7faf6;
+  color: #456e61;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-cell-output pre {
+  color: #456e61;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-cell-output [data-testid^="text-cell-error"] {
+  color: #b63f36;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-cell-body input:not([type="file"]),
+html[data-notebook-theme="light-waves"] .notebook-cell-body textarea,
+html[data-notebook-theme="light-waves"] .notebook-cell-body [role="combobox"] {
+  border-color: #e1e7df;
+  border-radius: 12px;
+  background: #fbfcf9;
+  color: #52645a;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-page [data-testid="card-notebook-assistant"] {
+  border-color: #e3e9e1;
+  border-radius: 22px;
+  background: #fffefa;
+  color: #34433f;
+  box-shadow: 0 5px 20px rgba(61, 80, 67, 0.035);
+}
+
+html[data-notebook-theme="light-waves"] .notebook-page [data-testid="card-notebook-assistant"] > div:first-child {
+  border-color: #e8ebe4;
+  background: #f2f6f3;
+}
+
+html[data-notebook-theme="windows95"] .notebook-page {
+  --background: 0 0% 73%;
+  --foreground: 0 0% 12%;
+  --card: 0 0% 87%;
+  --card-foreground: 0 0% 12%;
+  --popover: 0 0% 87%;
+  --popover-foreground: 0 0% 12%;
+  --muted: 0 0% 82%;
+  --muted-foreground: 0 0% 35%;
+  --border: 0 0% 53%;
+  --input: 0 0% 53%;
+  --primary: 240 100% 25%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 0 0% 82%;
+  --secondary-foreground: 0 0% 12%;
+  --accent: 0 0% 82%;
+  --accent-foreground: 0 0% 12%;
+  --ring: 240 100% 25%;
+  --radius: 0px;
+  color: #202020;
+  background-color: #b9b9b9;
+  background-image: radial-gradient(#a8a8a8 0.55px, transparent 0.55px);
+  background-size: 4px 4px;
+  font-family: Tahoma, "MS Sans Serif", sans-serif;
+}
+
+html[data-notebook-theme="windows95"] .notebook-page-header {
+  align-items: stretch;
+  gap: 0;
+  border: 1px solid #404040;
+  background: #c6c6c6;
+  box-shadow: 1px 1px 0 #fff inset, -1px -1px 0 #777 inset, 3px 4px 0 rgba(0, 0, 0, 0.18);
+}
+
+html[data-notebook-theme="windows95"] .notebook-page-brand {
+  min-height: 48px;
+  flex: 1;
+  padding: 5px 10px;
+  background: linear-gradient(90deg, #000080, #1084d0);
+  color: white;
+}
+
+html[data-notebook-theme="windows95"] .notebook-brand-icon {
+  width: 32px;
+  height: 32px;
+  border: 1px solid #777;
+  border-radius: 0;
+  background: #e7e7e7;
+  color: #222;
+}
+
+html[data-notebook-theme="windows95"] .notebook-page-brand .notebook-eyebrow,
+html[data-notebook-theme="windows95"] .notebook-page-subtitle {
+  display: none;
+}
+
+html[data-notebook-theme="windows95"] .notebook-page-brand h1 {
+  margin: 0;
+  color: #fff;
+  font-family: Tahoma, "MS Sans Serif", sans-serif;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+html[data-notebook-theme="windows95"] .notebook-theme-control {
+  gap: 2px;
+  padding: 5px;
+}
+
+html[data-notebook-theme="windows95"] .notebook-theme-control button {
+  min-height: 28px;
+  border: 1px solid;
+  border-color: #fff #555 #555 #fff;
+  border-radius: 0;
+  background: #c6c6c6;
+  color: #222;
+  font-family: Tahoma, "MS Sans Serif", sans-serif;
+  font-size: 11px;
+}
+
+html[data-notebook-theme="windows95"] .notebook-theme-control button[aria-pressed="true"] {
+  border-color: #555 #fff #fff #555;
+  background: #ddd;
+  color: #000080;
+  font-weight: 700;
+}
+
+html[data-notebook-theme="windows95"] .notebook-eyebrow {
+  color: #555;
+}
+
+html[data-notebook-theme="windows95"] .notebook-upload-card,
+html[data-notebook-theme="windows95"] .notebook-document-toolbar,
+html[data-notebook-theme="windows95"] .notebook-cell {
+  border: 1px solid #858585;
+  border-radius: 0;
+  background: #dedede;
+  box-shadow: 1px 1px #fff inset, -1px -1px #a1a1a1 inset;
+}
+
+html[data-notebook-theme="windows95"] .notebook-upload-card {
+  display: flex;
+  width: min(100%, 560px);
+  min-height: 360px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  margin: 36px auto 0;
+  padding: 36px 28px;
+  text-align: center;
+}
+
+html[data-notebook-theme="windows95"] .notebook-upload-icon {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  margin-bottom: 18px;
+  place-items: center;
+  border: 1px solid #777;
+  background: #e7e7e7;
+  box-shadow: 1px 1px #fff inset, -1px -1px #999 inset;
+  color: #000080;
+}
+
+html[data-notebook-theme="windows95"] .notebook-upload-card h2 {
+  margin: 8px 0 0;
+  color: #202020;
+  font-size: 21px;
+  font-weight: 700;
+}
+
+html[data-notebook-theme="windows95"] .notebook-upload-description {
+  max-width: 410px;
+  margin: 12px 0 20px;
+  color: #565656;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+html[data-notebook-theme="windows95"] .notebook-upload-button,
+html[data-notebook-theme="windows95"] .notebook-document-actions button,
+html[data-notebook-theme="windows95"] .notebook-cell-header button {
+  min-height: 28px;
+  border: 1px solid;
+  border-color: #fff #555 #555 #fff;
+  border-radius: 0;
+  background: #c6c6c6;
+  color: #202020;
+  font-family: Tahoma, "MS Sans Serif", sans-serif;
+  font-size: 11px;
+  box-shadow: 1px 1px 0 #fff inset;
+}
+
+html[data-notebook-theme="windows95"] .notebook-upload-footnote {
+  margin: 13px 0 0;
+  color: #666;
+  font-size: 10px;
+}
+
+html[data-notebook-theme="windows95"] .notebook-document-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+}
+
+html[data-notebook-theme="windows95"] .notebook-document-toolbar h2 {
+  margin: 2px 0 0;
+  color: #202020;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+html[data-notebook-theme="windows95"] .notebook-document-toolbar p:last-child {
+  margin: 3px 0 0;
+  color: #555;
+  font: 10px "Courier New", monospace;
+}
+
+html[data-notebook-theme="windows95"] .notebook-reader-panels [data-testid="card-notebook-analysis"],
+html[data-notebook-theme="windows95"] .notebook-reader-panels [data-testid="card-notebook-questions"],
+html[data-notebook-theme="windows95"] .notebook-page [data-testid="card-notebook-assistant"] {
+  border: 1px solid #858585;
+  border-radius: 0;
+  background: #dedede;
+  color: #202020;
+  box-shadow: 1px 1px #fff inset, -1px -1px #a1a1a1 inset;
+}
+
+html[data-notebook-theme="windows95"] .notebook-page [data-testid="card-notebook-assistant"] > div:first-child {
+  border-color: #858585;
+  border-radius: 0;
+  background: #c4c4c4;
+}
+
+html[data-notebook-theme="windows95"] .notebook-page [data-testid="card-notebook-assistant"] [class*="text-slate-"] {
+  color: #333 !important;
+}
+
+html[data-notebook-theme="windows95"] .notebook-page [data-testid="card-notebook-assistant"] [class*="bg-white"],
+html[data-notebook-theme="windows95"] .notebook-page [data-testid="card-notebook-assistant"] [class*="bg-slate-"] {
+  border-color: #aaa;
+  border-radius: 0;
+  background-color: #f4f4f4 !important;
+}
+
+html[data-notebook-theme="windows95"] .notebook-page [data-testid="card-notebook-assistant"] [data-testid^="message-assistant-user"] {
+  background: #dce8f3 !important;
+}
+
+html[data-notebook-theme="windows95"] .notebook-cell-list {
+  gap: 9px;
+}
+
+html[data-notebook-theme="windows95"] .notebook-cell {
+  overflow: hidden;
+  transition: opacity 160ms ease;
+}
+
+html[data-notebook-theme="windows95"] .notebook-cell-header {
+  min-height: 35px;
+  flex-wrap: wrap;
+  gap: 6px;
+  border-color: #858585;
+  background: #c4c4c4;
+  box-shadow: 0 1px #f2f2f2;
+  padding: 5px 7px;
+}
+
+html[data-notebook-theme="windows95"] .notebook-cell-header > div:first-child {
+  flex-wrap: wrap;
+}
+
+html[data-notebook-theme="windows95"] .notebook-cell-header [data-testid^="text-cell-execution-count"] {
+  color: #333;
+  font-size: 11px;
+}
+
+html[data-notebook-theme="windows95"] .notebook-cell-badge {
+  height: 20px;
+  border: 1px solid #909090;
+  border-radius: 0;
+  background: #ededed !important;
+  color: #343434 !important;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+html[data-notebook-theme="windows95"] .notebook-cell-badge-parameter {
+  background: #f1e5d1 !important;
+  color: #714500 !important;
+}
+
+html[data-notebook-theme="windows95"] .notebook-cell-badge-code {
+  background: #dce8f3 !important;
+  color: #153e69 !important;
+}
+
+html[data-notebook-theme="windows95"] .notebook-cell-body {
+  padding: 10px 12px;
+  color: #383838;
+}
+
+html[data-notebook-theme="windows95"] .notebook-cell-body .prose {
+  color: #383838;
+}
+
+html[data-notebook-theme="windows95"] .notebook-code-source,
+html[data-notebook-theme="windows95"] .notebook-parameter-source {
+  border: 1px solid #555;
+  border-radius: 0;
+  background: #17212b;
+  color: #d7e3ed;
+}
+
+html[data-notebook-theme="windows95"] .notebook-parameter-grid {
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
+  gap: 12px;
+}
+
+html[data-notebook-theme="windows95"] .notebook-parameter-source {
+  background: #242424;
+  color: #efc47f;
+}
+
+html[data-notebook-theme="windows95"] .notebook-cell-explanation {
+  border-color: #b3b3b3;
+  color: #555;
+}
+
+html[data-notebook-theme="windows95"] .notebook-cell-explanation span {
+  color: #333;
+}
+
+html[data-notebook-theme="windows95"] .notebook-cell-output {
+  border-color: #858585;
+  background: #f4f4f4;
+  box-shadow: 1px 1px #fff inset;
+  color: #222;
+}
+
+html[data-notebook-theme="windows95"] .notebook-cell-output pre {
+  color: #222;
+}
+
+html[data-notebook-theme="windows95"] .notebook-cell-output [data-testid^="text-cell-error"] {
+  color: #8b2020;
+}
+
+html[data-notebook-theme="windows95"] .notebook-cell-body input:not([type="file"]),
+html[data-notebook-theme="windows95"] .notebook-cell-body textarea,
+html[data-notebook-theme="windows95"] .notebook-cell-body [role="combobox"] {
+  border: 1px solid #777;
+  border-top-color: #444;
+  border-left-color: #444;
+  border-radius: 0;
+  background: #fff;
+  color: #222;
+}
+
+html[data-notebook-theme="windows95"] .notebook-page [data-testid="card-notebook-assistant"] input,
+html[data-notebook-theme="windows95"] .notebook-page [data-testid="card-notebook-assistant"] textarea {
+  border: 1px solid #777;
+  border-top-color: #444;
+  border-left-color: #444;
+  border-radius: 0;
+  background: #fff !important;
+  color: #202020 !important;
+}
+
+html[data-notebook-theme="windows95"] .notebook-page [data-testid="card-notebook-assistant"] button {
+  border-radius: 0;
+}
+
+@media (min-width: 1024px) {
+  html[data-notebook-theme="light-waves"] .notebook-cell-list {
+    padding-left: 66px;
+  }
+
+  html[data-notebook-theme="light-waves"] .notebook-cell-list::before {
+    left: 26px;
+  }
+}
+
+@media (max-width: 760px) {
+  .notebook-app-shell {
+    height: 100dvh !important;
+    flex-direction: column;
+  }
+
+  .notebook-sidebar {
+    display: grid !important;
+    width: 100% !important;
+    height: auto !important;
+    flex: 0 0 auto;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto auto;
+    border-right: 0 !important;
+    border-bottom: 1px solid;
+  }
+
+  .notebook-brand {
+    grid-column: 1;
+    grid-row: 1;
+    align-self: center;
+    padding: 8px 12px !important;
+    border: 0 !important;
+  }
+
+  .notebook-brand h1 {
+    font-size: 14px !important;
+  }
+
+  .notebook-sidebar-nav {
+    display: flex;
+    grid-column: 2;
+    grid-row: 1;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+    padding: 4px 8px !important;
+  }
+
+  .notebook-nav-link {
+    gap: 6px !important;
+    padding: 7px 9px !important;
+    font-size: 12px;
+  }
+
+  .notebook-nav-link svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .notebook-connect-panel {
+    display: grid !important;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 9px !important;
+    padding: 8px 12px !important;
+    border-top: 1px solid;
+  }
+
+  .notebook-connect-form > div > .flex {
+    margin-bottom: 5px;
+  }
+
+  .notebook-connect-form > div > .flex > div {
+    font-size: 11px !important;
+  }
+
+  .notebook-connect-controls {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 76px;
+    gap: 6px;
+  }
+
+  .notebook-connect-controls input {
+    min-width: 0;
+    height: 32px;
+  }
+
+  .notebook-connect-controls .notebook-ping-button {
+    width: 76px !important;
+    padding: 0 6px;
+    font-size: 10px;
+  }
+
+  .notebook-download-colab {
+    width: auto;
+  }
+
+  .notebook-download-colab button {
+    min-height: 32px;
+    padding: 0 7px;
+    font-size: 10px;
+  }
+
+  .notebook-app-shell > div:last-child {
+    min-height: 0;
+  }
+
+  .notebook-page {
+    padding: 20px 16px 32px;
+  }
+
+  .notebook-page-header {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 18px;
+  }
+
+  .notebook-theme-control {
+    width: 100%;
+  }
+
+  .notebook-theme-control button {
+    flex: 1;
+  }
+
+  .notebook-content {
+    gap: 14px;
+  }
+
+  .notebook-document-toolbar {
+    align-items: flex-start !important;
+    flex-direction: column;
+    gap: 12px !important;
+  }
+
+  .notebook-document-actions {
+    width: 100%;
+  }
+
+  .notebook-document-actions > button,
+  .notebook-document-actions > label,
+  .notebook-document-actions [data-slot="button"] {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .notebook-reader-panels {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .notebook-cell-list {
+    gap: 12px;
+  }
+
+  .notebook-cell-header {
+    padding: 10px 12px !important;
+  }
+
+  .notebook-cell-body {
+    padding: 14px !important;
+  }
+
+  .notebook-parameter-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 18px !important;
+  }
+
+  .notebook-upload-card {
+    min-height: 340px !important;
+    margin-top: 12px !important;
+    padding: 30px 20px !important;
+  }
+}
+
+@media (max-width: 420px) {
+  .notebook-brand h1 {
+    font-size: 12px !important;
+  }
+
+  .notebook-nav-link {
+    gap: 4px !important;
+    padding-inline: 6px !important;
+    font-size: 11px;
+  }
+
+  .notebook-connect-panel {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .notebook-download-colab {
+    display: none;
+  }
+
+  .notebook-page {
+    padding-inline: 12px;
+  }
+
+  .notebook-page-brand {
+    gap: 10px;
+  }
+
+  .notebook-brand-icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  .notebook-cell-header {
+    align-items: flex-start !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .notebook-page,
+  .notebook-cell,
+  .notebook-theme-control button {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
