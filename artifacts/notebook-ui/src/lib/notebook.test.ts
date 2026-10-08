@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { exportNotebook, parseNotebook } from "./notebook.ts";
+import {
+  analyzeNotebook,
+  answerNotebookQuestion,
+  explainNotebookCell,
+  exportNotebook,
+  parseNotebook,
+} from "./notebook.ts";
 import { buildNotebookContext } from "./notebook-context.ts";
 
 test("round-trips a standard notebook without dropping its metadata or saved outputs", () => {
@@ -75,6 +81,68 @@ test("round-trips the repository's Colab notebook metadata, cell IDs, counts, an
   const exported = JSON.parse(exportNotebook(parseNotebook(original), {}));
 
   assert.deepEqual(exported, original);
+});
+
+test("summarizes notebook structure, headings, execution state, and errors", () => {
+  const notebook = parseNotebook({
+    metadata: {
+      kernelspec: { language: "python", display_name: "Python 3" },
+    },
+    cells: [
+      { cell_type: "markdown", source: "# Load data\n\nRead the input file." },
+      { cell_type: "code", source: "import pandas as pd\n\ndata = pd.read_csv('input.csv')", execution_count: 1 },
+      {
+        cell_type: "code",
+        source: "model.fit(data)",
+        outputs: [{ output_type: "error", ename: "ValueError", evalue: "bad input" }],
+      },
+    ],
+  });
+
+  const analysis = analyzeNotebook(notebook);
+
+  assert.equal(analysis.totalCells, 3);
+  assert.equal(analysis.markdownCells, 1);
+  assert.equal(analysis.codeCells, 2);
+  assert.equal(analysis.executedCells, 1);
+  assert.equal(analysis.outputCells, 1);
+  assert.equal(analysis.errorCount, 1);
+  assert.equal(analysis.language, "python");
+  assert.deepEqual(analysis.sections, ["Load data"]);
+  assert.match(analysis.summary, /Load data/);
+  assert.match(analysis.summary, /ошибок: 1/);
+  assert.match(explainNotebookCell(notebook.cells[1], 1), /pandas/);
+});
+
+test("answers questions with relevant notebook cells and saved outputs", () => {
+  const notebook = parseNotebook({
+    cells: [
+      { cell_type: "markdown", source: "# Preparation\nClean the source data first." },
+      {
+        cell_type: "code",
+        source: "import pandas as pd\ndata = pd.read_csv('sales.csv')",
+        outputs: [{ output_type: "stream", text: "Loaded 12 rows" }],
+      },
+      { cell_type: "code", source: "print(data.shape)" },
+    ],
+  });
+
+  const libraryAnswer = answerNotebookQuestion(notebook, "Какие библиотеки использует ноутбук?");
+  assert.deepEqual(libraryAnswer.sources, [1]);
+  assert.match(libraryAnswer.text, /pandas/);
+  assert.match(libraryAnswer.text, /Loaded 12 rows/);
+
+  const cellAnswer = answerNotebookQuestion(notebook, "Что происходит в ячейке 1?");
+  assert.deepEqual(cellAnswer.sources, [0]);
+  assert.match(cellAnswer.text, /Preparation/);
+
+  const structureAnswer = answerNotebookQuestion(notebook, "Какова структура ноутбука?");
+  assert.equal(structureAnswer.sources.length, 0);
+  assert.match(structureAnswer.text, /3 ячеек/);
+
+  const noMatchAnswer = answerNotebookQuestion(notebook, "Что такое квантовая гравитация?");
+  assert.deepEqual(noMatchAnswer.sources, []);
+  assert.match(noMatchAnswer.text, /Не нашёл/);
 });
 
 test("builds assistant context from cell source and readable saved output only", () => {

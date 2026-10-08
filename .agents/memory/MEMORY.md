@@ -1,0 +1,1 @@
+- [Notebook reader model availability](notebook-reader-model.md) — only call the reader AI-powered when a provider is configured; keep source-grounded local answers transparent meanwhile.

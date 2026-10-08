@@ -1,7 +1,6 @@
 import { useRef, useState } from "react";
 import { AlertCircle, ArrowUp, BookOpenText, Check, CircleHelp, LoaderCircle, LockKeyhole, Sparkles, UserRound } from "lucide-react";
 import { useForm } from "react-hook-form";
-import { useAnalyzeNotebook } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
@@ -60,11 +59,10 @@ export function NotebookAssistant({ notebookContext, colabUrl }: NotebookAssista
   const [messages, setMessages] = useState<Message[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [retryRequest, setRetryRequest] = useState<RetryRequest | null>(null);
+  const [isPending, setIsPending] = useState(false);
   const nextMessageId = useRef(0);
   const form = useForm<{ question: string }>({ defaultValues: { question: "" } });
-  const analyzeNotebook = useAnalyzeNotebook();
   const question = form.watch("question") ?? "";
-  const isPending = analyzeNotebook.isPending;
   const hasConnection = Boolean(colabUrl?.trim());
   const canAsk = hasConnection && Boolean(notebookContext.trim()) && !isPending;
 
@@ -80,21 +78,41 @@ export function NotebookAssistant({ notebookContext, colabUrl }: NotebookAssista
     if (addUserMessage) addMessage({ role: "user", content: displayQuestion });
 
     try {
-      const result = await analyzeNotebook.mutateAsync({
-        data: {
+      setIsPending(true);
+      const response = await fetch("/api/colab/analyze-notebook", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
           colabUrl,
           notebookContext: notebookContext.slice(0, MAX_CONTEXT_LENGTH),
           question: apiQuestion.slice(0, MAX_QUESTION_LENGTH),
-        },
+        }),
       });
+      const result = await response.json() as {
+        answer?: unknown;
+        model?: unknown;
+        error?: unknown;
+      };
+      if (!response.ok) {
+        throw new Error(
+          typeof result.error === "string" && result.error.trim()
+            ? result.error
+            : `Сервер вернул HTTP ${response.status}.`,
+        );
+      }
+      if (typeof result.answer !== "string" || !result.answer.trim()) {
+        throw new Error("Сервер не вернул текст ответа.");
+      }
       addMessage({
         role: "assistant",
         content: result.answer,
-        model: result.model,
+        model: typeof result.model === "string" ? result.model : null,
       });
     } catch (error) {
       setErrorMessage(readableError(error));
       setRetryRequest({ displayQuestion, apiQuestion });
+    } finally {
+      setIsPending(false);
     }
   };
 

@@ -25,6 +25,18 @@ export interface Notebook {
   original?: Record<string, any>;
 }
 
+export interface NotebookAnalysis {
+  totalCells: number;
+  markdownCells: number;
+  codeCells: number;
+  parameterCells: number;
+  executedCells: number;
+  outputCells: number;
+  errorCount: number;
+  language: string | null;
+  sections: string[];
+  summary: string;
+}
 export function parseNotebook(json: any): Notebook {
   if (!json || typeof json !== 'object' || Array.isArray(json) || !Array.isArray(json.cells)) {
     throw new Error("Файл не похож на Jupyter/Colab-блокнот: ожидался объект с массивом cells.");
@@ -84,6 +96,9 @@ export function parseNotebook(json: any): Notebook {
   };
 }
 
+function cellSource(cell: NotebookCell): string {
+  return cell.source.join("");
+}
 function detectParams(sourceLines: string[]): ParamInfo[] {
   const params: ParamInfo[] = [];
   
@@ -168,4 +183,226 @@ export function exportNotebook(notebook: Notebook, cellValues: Record<string, Re
   };
 
   return JSON.stringify(exportData, null, 2);
+}
+
+export function explainNotebookCell(cell: NotebookCell, index: number): string {
+  const source = cellSource(cell).trim();
+  if (!source) {
+    return `Ячейка ${index + 1} пока пустая.`;
+  }
+  if (cell.type === "markdown") {
+    const title = source.match(/^\s{0,3}#{1,6}\s+(.+)$/m)?.[1]?.trim();
+    const text = markdownText(source).replace(/\s+/g, " ");
+    const preview = text.length > 180 ? `${text.slice(0, 177)}…` : text;
+    return title
+      ? `Раздел «${title}». ${preview}`
+      : `Текстовое пояснение: ${preview}`;
+  }
+
+  const actions = codeActions(source);
+  const params = cell.params?.map(param => param.varName) ?? [];
+  if (cell.type === "parameter" && params.length > 0) {
+    return `Ячейка с настраиваемыми параметрами: ${params.join(", ")}.${actions.length ? ` Также ${actions.join(" и ")}.` : ""}`;
+  }
+  if (actions.length > 0) {
+    return `По коду видно, что ячейка ${actions.join("; ")}.`;
+  }
+  return "Выполняет код Python. Описание выведено по содержимому ячейки; проверьте код и сохранённый результат ниже.";
+}
+
+function outputSource(output: any): string {
+  if (output?.output_type === "stream") {
+    return Array.isArray(output.text) ? output.text.join("") : String(output.text ?? "");
+  }
+  if (output?.output_type === "error") {
+    return [output.ename, output.evalue].filter(Boolean).join(": ");
+  }
+  const data = output?.data;
+  if (data && typeof data === "object") {
+    const mime = ["text/plain", "text/markdown", "application/json"]
+      .find(type => data[type] !== undefined);
+    if (mime) {
+      const value = data[mime];
+      return Array.isArray(value) ? value.join("") : String(value);
+    }
+  }
+  return "";
+}
+
+function codeActions(source: string): string[] {
+  const actions: string[] = [];
+  const imports = [...source.matchAll(/^\s*(?:import\s+([\w.]+)|from\s+([\w.]+)\s+import)/gm)]
+    .map(match => match[1] || match[2])
+    .filter(Boolean);
+  if (imports.length > 0) {
+    actions.push(`подключает библиотеки ${[...new Set(imports)].slice(0, 4).join(", ")}`);
+  }
+  if (/\b(read_csv|read_excel|read_json|read_parquet|read_sql|load_dataset|open)\s*\(/i.test(source)) {
+    actions.push("загружает данные или файл");
+  }
+  if (/\b(def|class)\s+\w+/m.test(source)) {
+    actions.push("определяет функцию или класс");
+  }
+  if (/\b(fit|train|backward|optimizer|Trainer)\s*\(?/i.test(source)) {
+    actions.push("обучает или настраивает модель");
+  }
+  if (/\b(plt\.|sns\.|plotly|\.plot\s*\()/i.test(source)) {
+    actions.push("строит визуализацию");
+  }
+  if (/\b(print|display)\s*\(/i.test(source)) {
+    actions.push("выводит текст или данные");
+  }
+  if (/\b(groupby|pivot_table|merge|concat|dropna|fillna|astype)\s*\(/i.test(source)) {
+    actions.push("обрабатывает таблицу или набор данных");
+  }
+  return [...new Set(actions)];
+}
+
+export function analyzeNotebook(notebook: Notebook): NotebookAnalysis {
+  const markdownCells = notebook.cells.filter(cell => cell.type === "markdown").length;
+  const parameterCells = notebook.cells.filter(cell => cell.type === "parameter").length;
+  const codeCells = notebook.cells.filter(cell => cell.type === "code").length;
+  const executedCells = notebook.cells.filter(cell => cell.execution_count != null).length;
+  const outputCells = notebook.cells.filter(cell => cell.outputs.length > 0).length;
+  const errorCount = notebook.cells.reduce(
+    (count, cell) => count + cell.outputs.filter(output => output?.output_type === "error").length,
+    0,
+  );
+  const sections = notebook.cells.flatMap(cell => {
+    if (cell.type !== "markdown") return [];
+    return [...cellSource(cell).matchAll(/^\s{0,3}#{1,6}\s+(.+)$/gm)]
+      .map(match => match[1].trim())
+      .filter(Boolean);
+  });
+  const kernelspec = notebook.metadata?.kernelspec;
+  const language = notebook.metadata?.language_info?.name
+    || kernelspec?.language
+    || (kernelspec?.display_name ? String(kernelspec.display_name).replace(/\s*\d.*$/, "") : null)
+    || null;
+
+  const actions = [...new Set(notebook.cells
+    .filter(cell => cell.type !== "markdown")
+    .flatMap(cell => codeActions(cellSource(cell))))].slice(0, 3);
+  const parts = [
+    `Ноутбук содержит ${notebook.cells.length} ячеек: ${codeCells + parameterCells} с кодом и параметрами, ${markdownCells} текстовых.`,
+    language ? `Язык ядра: ${language}.` : "",
+    sections.length ? `Разделы: ${sections.slice(0, 5).join(" → ")}${sections.length > 5 ? " и другие" : ""}.` : "",
+    actions.length ? `По коду видно, что ноутбук ${actions.join(", а также ")}.` : "",
+    errorCount > 0 ? `В сохранённых результатах найдено ошибок: ${errorCount}.` : "",
+  ].filter(Boolean);
+
+  return {
+    totalCells: notebook.cells.length,
+    markdownCells,
+    codeCells,
+    parameterCells,
+    executedCells,
+    outputCells,
+    errorCount,
+    language,
+    sections,
+    summary: parts.join(" "),
+  };
+}
+
+export interface NotebookAnswer {
+  text: string;
+  sources: number[];
+}
+
+const QUESTION_STOP_WORDS = new Set([
+  "что", "как", "где", "когда", "почему", "зачем", "какой", "какая", "какие", "это",
+  "есть", "для", "или", "при", "про", "мне", "можно", "ли", "в", "на", "и", "а", "но",
+  "the", "what", "how", "where", "when", "why", "which", "does", "this", "that", "with",
+  "from", "into", "are", "is", "and", "for",
+]);
+
+export function answerNotebookQuestion(notebook: Notebook, question: string): NotebookAnswer {
+  const normalizedQuestion = question.trim();
+  if (!normalizedQuestion) {
+    return { text: "Напишите вопрос о содержимом ноутбука.", sources: [] };
+  }
+
+  const analysis = analyzeNotebook(notebook);
+  if (/(структур|резюм|кратк|цель|содержит|делает ноутбук|обзор)/i.test(normalizedQuestion)) {
+    const sectionList = analysis.sections.length
+      ? `\n\nРазделы: ${analysis.sections.join(" → ")}.`
+      : "";
+    return { text: `${analysis.summary}${sectionList}`, sources: [] };
+  }
+
+  const cellNumber = normalizedQuestion.match(/(?:ячейк(?:а|е|и|у|ой)?|cell)\s*#?\s*(\d+)/i)?.[1];
+  if (cellNumber) {
+    const index = Number(cellNumber) - 1;
+    const cell = notebook.cells[index];
+    if (cell) {
+      const source = cellSource(cell).trim();
+      const excerpt = source.length > 700 ? `${source.slice(0, 697)}…` : source;
+      const output = cell.outputs.map(outputSource).filter(Boolean).join("\n").trim();
+      return {
+        text: [
+          explainNotebookCell(cell, index),
+          excerpt ? `\n\nКод или текст ячейки ${index + 1}:\n${excerpt}` : "",
+          output ? `\n\nСохранённый результат:\n${output.slice(0, 500)}` : "",
+        ].join(""),
+        sources: [index],
+      };
+    }
+  }
+
+  const terms = [...new Set(
+    normalizedQuestion.toLocaleLowerCase().match(/[а-яёa-z_][а-яёa-z0-9_]*/gi) ?? [],
+  )].filter(term => term.length > 1 && !QUESTION_STOP_WORDS.has(term));
+  const asksForLibraries = /библиотек|импорт|packages?|libraries/i.test(normalizedQuestion);
+  const asksForDataSources = /данн|файл|источник|dataset|csv|excel/i.test(normalizedQuestion);
+  const ranked = notebook.cells
+    .map((cell, index) => {
+      const rawSource = cellSource(cell);
+      const source = `${rawSource}\n${cell.outputs.map(outputSource).join("\n")}`.toLocaleLowerCase();
+      const score = terms.reduce((total, term) => total + (source.includes(term) ? 1 : 0), 0)
+        + (asksForLibraries && /^\s*(?:import\s+\w+|from\s+\w+\s+import)/m.test(rawSource) ? 2 : 0)
+        + (asksForDataSources && /\b(read_csv|read_excel|read_json|read_parquet|read_sql|load_dataset|open)\s*\(/i.test(rawSource) ? 2 : 0);
+      return { cell, index, score };
+    })
+    .filter(match => match.score > 0)
+    .sort((left, right) => right.score - left.score || left.index - right.index)
+    .slice(0, 3);
+
+  if (ranked.length === 0) {
+    const availableSections = analysis.sections.length
+      ? ` В ноутбуке есть разделы: ${analysis.sections.slice(0, 5).join(", ")}.`
+      : "";
+    return {
+      text: `Не нашёл в ячейках явного совпадения с этим вопросом. Попробуйте спросить о названии переменной, функции, разделе или конкретной ячейке.${availableSections}`,
+      sources: [],
+    };
+  }
+
+  const answers = ranked.map(({ cell, index, score }) => {
+    const rawSource = cellSource(cell).trim();
+    const output = cell.outputs.map(outputSource).filter(Boolean).join("\n").trim();
+    const quote = cell.type === "markdown" ? markdownText(rawSource) : rawSource;
+    const excerpt = quote.length > 560 ? `${quote.slice(0, 557)}…` : quote;
+    const outputExcerpt = output.length > 350 ? `${output.slice(0, 347)}…` : output;
+    return [
+      `Ячейка ${index + 1} (${score} совпадений): ${explainNotebookCell(cell, index)}`,
+      excerpt ? `Фрагмент: “${excerpt}”` : "",
+      outputExcerpt ? `Сохранённый результат: “${outputExcerpt}”` : "",
+    ].filter(Boolean).join("\n");
+  });
+
+  return {
+    text: `Нашёл это в ноутбуке:\n\n${answers.join("\n\n")}`,
+    sources: ranked.map(match => match.index),
+  };
+}
+
+function markdownText(source: string): string {
+  return source
+    .replace(/^\s{0,3}#{1,6}\s+/gm, "")
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+    .replace(/[`*_~]/g, "")
+    .replace(/^\s*[-*+]\s+/gm, "")
+    .trim();
 }

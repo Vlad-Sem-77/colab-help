@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Upload, Play, Download, Code, FileText, Settings2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -8,11 +8,19 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { Notebook, NotebookCell, ParamInfo, parseNotebook, exportNotebook } from "@/lib/notebook";
 import { buildNotebookContext } from "@/lib/notebook-context";
 import { NotebookAssistant } from "@/components/notebook-assistant";
+import {
+  Notebook,
+  NotebookCell,
+  ParamInfo,
+  explainNotebookCell,
+  parseNotebook,
+  exportNotebook,
+} from "@/lib/notebook";
 import { useColabUrl } from "@/hooks/use-colab-url";
 import { useRunExperiment } from "@workspace/api-client-react";
+import { NotebookReader } from "@/components/notebook-reader";
 
 function CellHeader({ index, type, executionCount, onRun, isRunning }: { index: number, type: string, executionCount?: number | null, onRun?: () => void, isRunning?: boolean }) {
   const displayCount = executionCount === undefined ? index + 1 : executionCount ?? " ";
@@ -26,7 +34,6 @@ function CellHeader({ index, type, executionCount, onRun, isRunning }: { index: 
         {type === 'markdown' && <Badge variant="secondary" className="bg-gray-800 text-gray-300"><FileText className="w-3 h-3 mr-1"/> Markdown</Badge>}
         {type === 'code' && <Badge variant="secondary" className="bg-blue-950 text-blue-300"><Code className="w-3 h-3 mr-1"/> Code</Badge>}
         {type === 'parameter' && <Badge variant="secondary" className="bg-orange-950 text-orange-300"><Settings2 className="w-3 h-3 mr-1"/> Parameters</Badge>}
-        {type === 'raw' && <Badge variant="secondary"><FileText className="w-3 h-3 mr-1"/> Raw</Badge>}
       </div>
       {(type === 'parameter' || type === 'code') && onRun && (
         <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={onRun} disabled={isRunning}>
@@ -239,13 +246,14 @@ export default function Home() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    const input = e.currentTarget;
     const reader = new FileReader();
     reader.onload = (ev) => {
       try {
         const json = JSON.parse(ev.target?.result as string);
         const parsed = parseNotebook(json);
         setNotebook(parsed);
-        setNotebookRevision((revision) => revision + 1);
+        setNotebookRevision(revision => revision + 1);
         setCellValues({});
         setCellResults({});
       } catch (err) {
@@ -264,6 +272,7 @@ export default function Home() {
       });
     };
     reader.readAsText(file);
+    input.value = "";
   };
 
   const updateCellValue = (cellId: string, varName: string, value: any) => {
@@ -355,13 +364,13 @@ export default function Home() {
             <Upload className="w-8 h-8 text-muted-foreground" />
           </div>
           <div>
-            <h2 className="text-2xl font-semibold mb-2">Upload Notebook</h2>
-            <p className="text-muted-foreground">Load a .ipynb file to start experimenting.</p>
+            <h2 className="text-2xl font-semibold mb-2">Загрузите ноутбук</h2>
+            <p className="text-muted-foreground">Выберите файл .ipynb, чтобы изучить его структуру и содержимое.</p>
           </div>
           <div className="relative">
-            <Input type="file" accept=".ipynb" onChange={handleFileUpload} className="hidden" id="file-upload" data-testid="input-upload-notebook" />
+            <Input type="file" accept=".ipynb" onChange={handleFileUpload} className="hidden" id="file-upload" />
             <Button asChild className="w-full" size="lg">
-              <label htmlFor="file-upload" className="cursor-pointer">Select File</label>
+              <label htmlFor="file-upload" className="cursor-pointer">Выбрать файл</label>
             </Button>
           </div>
         </div>
@@ -370,16 +379,32 @@ export default function Home() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto py-8 px-4 space-y-6">
+    <div className="max-w-6xl mx-auto py-8 px-4 space-y-6">
       <div className="flex items-center justify-between bg-card p-4 rounded-lg border shadow-sm">
-        <h2 className="text-lg font-semibold">Interactive Notebook</h2>
+        <h2 className="text-lg font-semibold">Помощник по ноутбукам</h2>
         <div className="flex gap-2">
+          <Input
+            type="file"
+            accept=".ipynb"
+            onChange={handleFileUpload}
+            className="hidden"
+            id="replace-notebook-file"
+            data-testid="input-replace-notebook"
+          />
+          <Button variant="outline" asChild>
+            <label htmlFor="replace-notebook-file" className="cursor-pointer">
+              <Upload className="w-4 h-4 mr-2" />
+              Другой файл
+            </label>
+          </Button>
           <Button variant="outline" onClick={handleDownload}>
             <Download className="w-4 h-4 mr-2" />
-            Export
+            Скачать
           </Button>
         </div>
       </div>
+
+      <NotebookReader key={notebookRevision} notebook={notebook} />
 
       <div className="space-y-4">
         {notebook.cells.map((cell, index) => {
@@ -430,12 +455,13 @@ export default function Home() {
                         </div>
                       </div>
                     )}
-
-                    {cell.type === 'raw' && (
-                      <pre className="text-sm font-mono p-4 rounded bg-muted/50 overflow-x-auto whitespace-pre-wrap">
-                        {cell.source.join("")}
-                      </pre>
-                    )}
+                    <p
+                      className="mt-4 border-t pt-3 text-sm leading-relaxed text-muted-foreground"
+                      data-testid={`text-cell-explanation-${index}`}
+                    >
+                      <span className="font-medium text-foreground">Пояснение: </span>
+                      {explainNotebookCell(cell, index)}
+                    </p>
                   </div>
 
                   {cellResults[cell.id] !== undefined ? (
@@ -457,7 +483,7 @@ export default function Home() {
       </div>
 
       <NotebookAssistant
-        key={notebookRevision}
+        key={`assistant-${notebookRevision}`}
         notebookContext={notebookContext}
         colabUrl={colabUrl}
       />
