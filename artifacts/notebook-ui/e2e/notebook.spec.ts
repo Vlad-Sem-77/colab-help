@@ -201,49 +201,73 @@ test("uploads notebook text, parameters and saved results with the notebook help
 });
 
 test("adds consented AI explanations to notebook cells without changing the exported source", async ({ page }) => {
-  let submittedContext = "";
-  let submittedModelId = "";
+  const submittedRequests: Array<{
+    targetCellIndex?: number;
+    notebookContext: string;
+    modelId: string;
+  }> = [];
   await page.route("**/api/ai/explain-notebook-cells", async (route) => {
     const request = route.request().postDataJSON() as {
       providerId: string;
       modelId: string;
       notebookContext: string;
+      targetCellIndex?: number;
     };
-    submittedContext = request.notebookContext;
-    submittedModelId = request.modelId;
+    submittedRequests.push({
+      targetCellIndex: request.targetCellIndex,
+      notebookContext: request.notebookContext,
+      modelId: request.modelId,
+    });
     await route.fulfill({
       json: {
         providerId: request.providerId,
         modelId: request.modelId,
-        explanations: [
-          { cellIndex: 0, explanation: "ИИ-пояснение: цель и первый шаг обработки." },
-          { cellIndex: 1, explanation: "ИИ поясняет доступные параметры ноутбука." },
-        ],
+        explanations: request.targetCellIndex === undefined
+          ? [
+            { cellIndex: 0, explanation: "ИИ-пояснение: цель и первый шаг обработки." },
+            { cellIndex: 1, explanation: "ИИ поясняет доступные параметры ноутбука." },
+          ]
+          : [{ cellIndex: request.targetCellIndex, explanation: "ИИ-пояснение: цель и первый шаг обработки." }],
       },
     });
   });
 
   await page.getByTestId("input-upload-notebook").setInputFiles(notebookFixture);
-  const explainButton = page.getByTestId("button-explain-cells-with-ai");
-  await expect(explainButton).toBeDisabled();
+  const askCellButton = page.getByTestId("button-ask-ai-cell-0");
+  const explainAllButton = page.getByTestId("button-explain-entire-notebook");
+  await expect(askCellButton).toBeDisabled();
+  await expect(explainAllButton).toBeDisabled();
 
   await page.getByTestId("input-ai-provider-key").fill("test-cell-explanations-key");
   await page.getByTestId("button-use-ai-provider-key").click();
   await expect(page.getByTestId("text-ai-session-key-active")).toBeVisible();
   await page.getByTestId("checkbox-notebook-ai-consent").click();
-  await expect(explainButton).toBeEnabled();
-  await explainButton.click();
+  await expect(askCellButton).toBeEnabled();
+  await expect(explainAllButton).toBeEnabled();
+  await askCellButton.click();
 
+  await expect(page.getByTestId("text-cell-explanation-0"))
+    .toContainText("ИИ-пояснение: цель и первый шаг обработки.");
+  await expect(page.getByTestId("text-ai-cell-explanation-source-0"))
+    .toContainText(submittedRequests[0]?.modelId ?? "");
+  expect(submittedRequests).toHaveLength(1);
+  expect(submittedRequests[0].targetCellIndex).toBe(0);
+  expect(submittedRequests[0].notebookContext).toContain("[Ячейка 1 · markdown]");
+  expect(submittedRequests[0].notebookContext).not.toContain("[Ячейка 3 · code]");
+  expect(submittedRequests[0].notebookContext).not.toContain("Сохранённый результат: 12 строк");
+
+  await explainAllButton.click();
   await expect(page.getByTestId("status-ai-cell-explanations"))
     .toContainText("пояснила 2 из 3 ячеек");
   await expect(page.getByTestId("text-cell-explanation-0"))
     .toContainText("ИИ-пояснение: цель и первый шаг обработки.");
   await expect(page.getByTestId("text-ai-cell-explanation-source-0"))
-    .toContainText(submittedModelId);
+    .toContainText(submittedRequests[1]?.modelId ?? "");
   await expect(page.getByTestId("text-cell-explanation-2"))
     .toContainText("Смысл ячейки:");
-  expect(submittedContext).toContain("[Ячейка 3 · code]");
-  expect(submittedContext).toContain("Сохранённый результат: 12 строк");
+  expect(submittedRequests[1].targetCellIndex).toBeUndefined();
+  expect(submittedRequests[1].notebookContext).toContain("[Ячейка 3 · code]");
+  expect(submittedRequests[1].notebookContext).toContain("Сохранённый результат: 12 строк");
 
   const downloadPromise = page.waitForEvent("download");
   await page.getByTestId("button-download-notebook").click();

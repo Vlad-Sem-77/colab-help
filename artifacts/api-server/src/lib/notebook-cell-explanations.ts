@@ -9,6 +9,7 @@ const MAX_EXPLANATION_LENGTH = 1600;
 export function parseAiNotebookCellExplanations(
   notebookContext: string,
   modelOutput: string,
+  targetCellIndex?: number,
 ): AiNotebookCellExplanation[] {
   const availableCellNumbers = new Set(
     [...notebookContext.matchAll(/^\[Ячейка\s+(\d+)\s*·/gim)]
@@ -47,6 +48,7 @@ export function parseAiNotebookCellExplanations(
       typeof cellNumber !== "number"
       || !Number.isInteger(cellNumber)
       || !availableCellNumbers.has(cellNumber)
+      || (targetCellIndex !== undefined && cellNumber !== targetCellIndex + 1)
       || seen.has(cellNumber)
       || !explanation
       || explanation.length > MAX_EXPLANATION_LENGTH

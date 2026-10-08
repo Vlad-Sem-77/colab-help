@@ -48,6 +48,19 @@ test("drops duplicate, empty, overlong, and malformed explanations", () => {
   ]);
 });
 
+test("keeps only the requested cell explanation for a focused request", () => {
+  const explanations = parseAiNotebookCellExplanations(context, JSON.stringify({
+    explanations: [
+      { cellNumber: 1, explanation: "Вводный раздел." },
+      { cellNumber: 2, explanation: "Поясняет импорт pandas для обработки таблиц." },
+    ],
+  }), 1);
+
+  assert.deepEqual(explanations, [
+    { cellIndex: 1, explanation: "Поясняет импорт pandas для обработки таблиц." },
+  ]);
+});
+
 test("rejects invalid model output", () => {
   assert.deepEqual(parseAiNotebookCellExplanations(context, "not JSON"), []);
   assert.deepEqual(parseAiNotebookCellExplanations(context, '{"answer":"not a list"}'), []);

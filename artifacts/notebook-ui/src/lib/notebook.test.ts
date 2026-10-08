@@ -18,7 +18,7 @@ import {
   saveCellEnabledState,
   setCellEnabled,
 } from "./notebook.ts";
-import { buildNotebookContext } from "./notebook-context.ts";
+import { buildNotebookCellContext, buildNotebookContext } from "./notebook-context.ts";
 
 test("round-trips a standard notebook without dropping its metadata or saved outputs", () => {
   const original = {
@@ -325,6 +325,35 @@ test("caps notebook context and marks when content was omitted", () => {
   assert.ok(context.length <= 80);
   assert.match(context, /Контекст сокращён/);
   assert.equal(/[\uD800-\uDBFF]$/.test(context), false);
+});
+
+test("builds a focused cell request with nearby purpose and code that uses its imports", () => {
+  const notebook = parseNotebook({
+    cells: [
+      { cell_type: "markdown", source: "## Подготовка таблицы", outputs: [] },
+      {
+        cell_type: "code",
+        source: "import pandas as pd\nfrom sklearn.model_selection import train_test_split",
+        outputs: [],
+      },
+      { cell_type: "code", source: 'title = "Независимая ячейка"', outputs: [] },
+      {
+        cell_type: "code",
+        source: 'data = pd.read_csv("sales.csv")\ntrain, test = train_test_split(data)',
+        outputs: [],
+      },
+      { cell_type: "markdown", source: "## Построение графика", outputs: [] },
+    ],
+  });
+
+  const context = buildNotebookCellContext(notebook, {}, 1);
+
+  assert.match(context, /\[Ячейка 2 · code\]/);
+  assert.match(context, /\[Ячейка 1 · markdown\]/);
+  assert.match(context, /\[Ячейка 4 · code\]/);
+  assert.doesNotMatch(context, /\[Ячейка 3 · code\]/);
+  assert.doesNotMatch(context, /\[Ячейка 5 · markdown\]/);
+  assert.equal(buildNotebookCellContext(notebook, {}, 50), "");
 });
 
 test("returns a readable note for notebooks without cells", () => {

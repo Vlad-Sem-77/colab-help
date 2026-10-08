@@ -1,8 +1,15 @@
 import type { Notebook } from "./notebook.ts";
 
 const DEFAULT_MAX_LENGTH = 32_000;
+const DEFAULT_CELL_CONTEXT_MAX_LENGTH = 10_000;
 const TRUNCATION_MARKER = "\n[Контекст сокращён: часть содержимого не отправлена.]";
 const TEXT_MIME_TYPES = ["text/plain", "text/markdown", "application/json"] as const;
+const PYTHON_KEYWORDS = new Set([
+  "and", "as", "assert", "async", "await", "break", "class", "continue", "def", "del",
+  "elif", "else", "except", "finally", "for", "from", "global", "if", "import", "in",
+  "is", "lambda", "nonlocal", "not", "or", "pass", "raise", "return", "try", "while",
+  "with", "yield", "true", "false", "none", "self", "print",
+]);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -60,6 +67,133 @@ function safePrefix(value: string, length: number): string {
   return prefix;
 }
 
+function getCellSource(cell: Notebook["cells"][number]): string {
+  return cell.source.filter((line): line is string => typeof line === "string").join("");
+}
+
+function formatNotebookCell(
+  notebook: Notebook,
+  cellResults: Record<string, unknown>,
+  index: number,
+): string {
+  const cell = notebook.cells[index];
+  const source = getCellSource(cell);
+  const details = [`[Ячейка ${index + 1} · ${cell.type}]`];
+
+  if (source.trim()) details.push(`Содержимое:\n${source}`);
+
+  cell.outputs.forEach((output, outputIndex) => {
+    const text = savedOutputText(output);
+    if (text.trim()) details.push(`Сохранённый результат ${outputIndex + 1}:\n${text}`);
+  });
+
+  const executedResult = toText(cellResults[cell.id]);
+  if (executedResult.trim()) details.push(`Текущий результат выполнения:\n${executedResult}`);
+
+  return details.join("\n\n");
+}
+
+function identifiersIn(source: string): Set<string> {
+  return new Set(
+    [...source.matchAll(/\b[A-Za-z_][A-Za-z0-9_]*\b/g)]
+      .map((match) => match[0])
+      .filter((identifier) => !PYTHON_KEYWORDS.has(identifier.toLowerCase())),
+  );
+}
+
+function importsIn(source: string): Set<string> {
+  const imports = new Set<string>();
+  for (const line of source.split(/\r?\n/)) {
+    const fromImport = line.match(/^\s*from\s+[\w.]+\s+import\s+(.+?)(?:\s+#.*)?$/);
+    const directImport = line.match(/^\s*import\s+(.+?)(?:\s+#.*)?$/);
+    const isFromImport = Boolean(fromImport);
+    const importList = fromImport?.[1] ?? directImport?.[1];
+    if (!importList) continue;
+
+    for (const item of importList.replace(/[()]/g, "").split(",")) {
+      const [name, alias] = item.trim().split(/\s+as\s+/);
+      const binding = alias?.trim()
+        || (isFromImport ? name?.trim() : name?.trim().split(".")[0]);
+      if (binding && /^[A-Za-z_]\w*$/.test(binding) && !PYTHON_KEYWORDS.has(binding.toLowerCase())) {
+        imports.add(binding);
+      }
+    }
+  }
+  return imports;
+}
+
+function scoreSharedIdentifiers(source: string, targetIdentifiers: Set<string>): number {
+  const candidateIdentifiers = identifiersIn(source);
+  let score = 0;
+  for (const identifier of targetIdentifiers) {
+    if (candidateIdentifiers.has(identifier)) score += identifier.length >= 8 ? 2 : 1;
+  }
+  return score;
+}
+
+function relevantCellIndexes(notebook: Notebook, targetIndex: number): number[] {
+  const target = notebook.cells[targetIndex];
+  const targetSource = getCellSource(target);
+  const selected = new Set<number>([targetIndex]);
+  const targetImports = importsIn(targetSource);
+  const targetIdentifiers = identifiersIn(targetSource);
+
+  for (let index = targetIndex - 1; index >= 0; index -= 1) {
+    if (notebook.cells[index].type === "markdown") {
+      selected.add(index);
+      break;
+    }
+  }
+
+  if (target.type === "markdown") {
+    const nextCodeIndex = notebook.cells.findIndex(
+      (cell, index) => index > targetIndex && (cell.type === "code" || cell.type === "parameter"),
+    );
+    if (nextCodeIndex >= 0) selected.add(nextCodeIndex);
+    return [...selected].sort((left, right) => left - right);
+  }
+
+  const importMatches = notebook.cells
+    .map((cell, index) => ({
+      index,
+      score: index === targetIndex
+        ? 0
+        : [...importsIn(getCellSource(cell))]
+          .filter((binding) => targetIdentifiers.has(binding)).length,
+      isImportCell: importsIn(getCellSource(cell)).size > 0,
+    }))
+    .filter((candidate) => candidate.isImportCell && candidate.score > 0)
+    .sort((left, right) => right.score - left.score || Math.abs(left.index - targetIndex) - Math.abs(right.index - targetIndex))
+    .slice(0, 2);
+  for (const candidate of importMatches) selected.add(candidate.index);
+
+  const usageIdentifiers = targetImports.size > 0
+    ? targetImports
+    : new Set([...targetIdentifiers].filter((identifier) => identifier.length >= 4));
+  const relatedCode = notebook.cells
+    .map((cell, index) => {
+      const source = getCellSource(cell);
+      const score = index === targetIndex ? 0 : scoreSharedIdentifiers(source, usageIdentifiers);
+      return { index, score, type: cell.type };
+    })
+    .filter(({ index, score, type }) => (
+      index !== targetIndex
+      && (type === "code" || type === "parameter")
+      && score > 0
+      && (targetImports.size > 0 || score >= 2 || scoreSharedIdentifiers(getCellSource(notebook.cells[index]), usageIdentifiers) >= 2)
+    ))
+    .sort((left, right) => right.score - left.score || Math.abs(left.index - targetIndex) - Math.abs(right.index - targetIndex))
+    .slice(0, targetImports.size > 0 ? 3 : 2);
+  for (const candidate of relatedCode) selected.add(candidate.index);
+
+  if (selected.size === 1) {
+    const adjacentIndex = targetIndex > 0 ? targetIndex - 1 : targetIndex + 1;
+    if (notebook.cells[adjacentIndex]) selected.add(adjacentIndex);
+  }
+
+  return [...selected].sort((left, right) => left - right);
+}
+
 export function buildNotebookContext(
   notebook: Notebook,
   cellResults: Record<string, unknown> = {},
@@ -68,22 +202,7 @@ export function buildNotebookContext(
   const limit = Number.isFinite(maxLength) ? Math.max(0, Math.floor(maxLength)) : DEFAULT_MAX_LENGTH;
   if (limit === 0) return "";
 
-  const sections = notebook.cells.map((cell, index) => {
-    const source = cell.source.filter((line): line is string => typeof line === "string").join("");
-    const details = [`[Ячейка ${index + 1} · ${cell.type}]`];
-
-    if (source.trim()) details.push(`Содержимое:\n${source}`);
-
-    cell.outputs.forEach((output, outputIndex) => {
-      const text = savedOutputText(output);
-      if (text.trim()) details.push(`Сохранённый результат ${outputIndex + 1}:\n${text}`);
-    });
-
-    const executedResult = toText(cellResults[cell.id]);
-    if (executedResult.trim()) details.push(`Текущий результат выполнения:\n${executedResult}`);
-
-    return details.join("\n\n");
-  });
+  const sections = notebook.cells.map((_, index) => formatNotebookCell(notebook, cellResults, index));
 
   const context = sections.join("\n\n").trim()
     || "Блокнот не содержит текстовых ячеек и сохранённых текстовых результатов.";
@@ -94,4 +213,52 @@ export function buildNotebookContext(
   }
 
   return `${safePrefix(context, limit - TRUNCATION_MARKER.length).trimEnd()}${TRUNCATION_MARKER}`;
+}
+
+export function buildNotebookCellContext(
+  notebook: Notebook,
+  cellResults: Record<string, unknown>,
+  targetCellIndex: number,
+  maxLength = DEFAULT_CELL_CONTEXT_MAX_LENGTH,
+): string {
+  if (
+    !Number.isInteger(targetCellIndex)
+    || targetCellIndex < 0
+    || targetCellIndex >= notebook.cells.length
+    || !Number.isFinite(maxLength)
+    || maxLength <= 0
+  ) {
+    return "";
+  }
+
+  const limit = Math.max(1, Math.floor(maxLength));
+  const indexes = relevantCellIndexes(notebook, targetCellIndex);
+  const targetSection = formatNotebookCell(notebook, cellResults, targetCellIndex);
+  if (targetSection.length >= limit) {
+    if (limit <= TRUNCATION_MARKER.length) return safePrefix(targetSection, limit);
+    return `${safePrefix(targetSection, limit - TRUNCATION_MARKER.length).trimEnd()}${TRUNCATION_MARKER}`;
+  }
+
+  const sections = new Map<number, string>([[targetCellIndex, targetSection]]);
+  let remaining = limit - targetSection.length;
+  let omittedContext = false;
+  for (const index of indexes) {
+    if (index === targetCellIndex) continue;
+    const section = formatNotebookCell(notebook, cellResults, index);
+    const separatorLength = sections.size > 0 ? 2 : 0;
+    if (section.length + separatorLength > remaining) {
+      omittedContext = true;
+      continue;
+    }
+    sections.set(index, section);
+    remaining -= section.length + separatorLength;
+  }
+
+  const context = [...sections.entries()]
+    .sort(([left], [right]) => left - right)
+    .map(([, section]) => section)
+    .join("\n\n");
+  const note = omittedContext ? "\n\n[Часть связанного контекста не отправлена.]" : "";
+  const result = `${context}${note}`;
+  return result.length <= limit ? result : safePrefix(result, limit);
 }

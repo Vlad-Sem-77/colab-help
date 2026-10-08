@@ -21,4 +21,9 @@ export interface AiCellExplanationsInput {
      * @maxLength 32000
      */
   notebookContext: string;
+  /**
+     * @minimum 0
+     * @maximum 99999
+     */
+  targetCellIndex?: number;
 }

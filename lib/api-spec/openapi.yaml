@@ -655,6 +655,10 @@ components:
           type: string
           minLength: 1
           maxLength: 32000
+        targetCellIndex:
+          type: integer
+          minimum: 0
+          maximum: 99999
 
     AiCellExplanation:
       type: object

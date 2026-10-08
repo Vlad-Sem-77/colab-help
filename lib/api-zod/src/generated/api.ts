@@ -215,13 +215,17 @@ export const explainNotebookCellsWithAiBodyModelIdMax = 200;
 
 export const explainNotebookCellsWithAiBodyNotebookContextMax = 32000;
 
+export const explainNotebookCellsWithAiBodyTargetCellIndexMin = 0;
+export const explainNotebookCellsWithAiBodyTargetCellIndexMax = 99999;
+
 
 
 export const ExplainNotebookCellsWithAiBody = zod.object({
   "providerId": zod.enum(['aitunnel', 'proxyapi', 'routerai', 'openai']),
   "modelId": zod.string().min(1).max(explainNotebookCellsWithAiBodyModelIdMax),
   "profile": zod.enum(['review', 'economy']),
-  "notebookContext": zod.string().min(1).max(explainNotebookCellsWithAiBodyNotebookContextMax)
+  "notebookContext": zod.string().min(1).max(explainNotebookCellsWithAiBodyNotebookContextMax),
+  "targetCellIndex": zod.number().int().min(explainNotebookCellsWithAiBodyTargetCellIndexMin).max(explainNotebookCellsWithAiBodyTargetCellIndexMax).optional()
 })
 
 export const explainNotebookCellsWithAiResponseExplanationsItemCellIndexMin = 0;

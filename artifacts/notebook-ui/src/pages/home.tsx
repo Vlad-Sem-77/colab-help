@@ -10,7 +10,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { buildNotebookContext } from "@/lib/notebook-context";
+import { buildNotebookCellContext, buildNotebookContext } from "@/lib/notebook-context";
 import { NotebookAssistant } from "@/components/notebook-assistant";
 import { AiProviderSettings } from "@/components/ai-provider-settings";
 import {
@@ -50,6 +50,7 @@ import { useNotebookTheme } from "@/components/layout";
 import { useNotebookSession } from "@/components/notebook-session";
 
 type CellRunStatus = "running" | "simulated";
+type AiCellExplanation = { explanation: string; modelId: string };
 type BatchRunState =
   | { status: "running"; currentCellId: string; cellNumber: number; position: number; total: number }
   | { status: "simulated"; completed: number; total: number }
@@ -375,14 +376,16 @@ export default function Home() {
   const [notebookRevision, setNotebookRevision] = useState(0);
   const [aiSettings, setAiSettings] = useState<AiSettings>(readSavedAiSettings);
   const [allowOnlineAi, setAllowOnlineAi] = useState(false);
-  const [aiCellExplanations, setAiCellExplanations] = useState<Record<number, string>>({});
+  const [aiCellExplanations, setAiCellExplanations] = useState<Record<number, AiCellExplanation>>({});
   const [aiCellExplanationModel, setAiCellExplanationModel] = useState("");
   const [aiCellExplanationStatus, setAiCellExplanationStatus] = useState<{
     explained: number;
     total: number;
   } | null>(null);
   const [aiCellExplanationError, setAiCellExplanationError] = useState<string | null>(null);
-  const [isExplainingCells, setIsExplainingCells] = useState(false);
+  const [aiCellExplanationErrors, setAiCellExplanationErrors] = useState<Record<number, string>>({});
+  const [isExplainingNotebook, setIsExplainingNotebook] = useState(false);
+  const [explainingCellIndex, setExplainingCellIndex] = useState<number | null>(null);
   const cellExplanationRequestId = useRef(0);
   const explainNotebookCells = useExplainNotebookCellsWithAi();
   const queryClient = useQueryClient();
@@ -462,7 +465,8 @@ export default function Home() {
       || getActiveAiModelId(nextSettings) !== getActiveAiModelId(aiSettings)
     ) {
       cellExplanationRequestId.current += 1;
-      setIsExplainingCells(false);
+      setIsExplainingNotebook(false);
+      setExplainingCellIndex(null);
     }
     setAiSettings(nextSettings);
   };
@@ -565,7 +569,9 @@ export default function Home() {
         setAiCellExplanationModel("");
         setAiCellExplanationStatus(null);
         setAiCellExplanationError(null);
-        setIsExplainingCells(false);
+        setAiCellExplanationErrors({});
+        setIsExplainingNotebook(false);
+        setExplainingCellIndex(null);
         setCellValues({});
         setCellResults({});
         setCellRunStatuses({});
@@ -746,12 +752,12 @@ export default function Home() {
     URL.revokeObjectURL(url);
   };
 
-  const handleExplainNotebookCells = async () => {
-    if (!notebook || !aiReady || !allowOnlineAi || !notebookContext.trim() || isExplainingCells) return;
+  const handleExplainEntireNotebook = async () => {
+    if (!notebook || !aiReady || !allowOnlineAi || !notebookContext.trim() || isExplainingNotebook || explainingCellIndex !== null) return;
 
     const requestId = ++cellExplanationRequestId.current;
     setAiCellExplanationError(null);
-    setIsExplainingCells(true);
+    setIsExplainingNotebook(true);
     try {
       const result = await explainNotebookCells.mutateAsync({
         data: {
@@ -763,12 +769,15 @@ export default function Home() {
       });
       if (requestId !== cellExplanationRequestId.current) return;
       const nextExplanations = Object.fromEntries(
-        result.explanations.map(({ cellIndex, explanation }) => [cellIndex, explanation]),
+        result.explanations.map(({ cellIndex, explanation }) => [
+          cellIndex,
+          { explanation, modelId: result.modelId },
+        ]),
       );
       if (Object.keys(nextExplanations).length === 0) {
         throw new Error("Модель не вернула пояснения ячеек.");
       }
-      setAiCellExplanations(nextExplanations);
+      setAiCellExplanations(previous => ({ ...previous, ...nextExplanations }));
       setAiCellExplanationModel(result.modelId);
       setAiCellExplanationStatus({
         explained: Object.keys(nextExplanations).length,
@@ -782,7 +791,62 @@ export default function Home() {
           : "Не удалось получить пояснения. Проверьте подключение ИИ и попробуйте ещё раз.",
       );
     } finally {
-      if (requestId === cellExplanationRequestId.current) setIsExplainingCells(false);
+      if (requestId === cellExplanationRequestId.current) setIsExplainingNotebook(false);
+    }
+  };
+
+  const handleAskAiAboutCell = async (targetCellIndex: number) => {
+    if (
+      !notebook
+      || !aiReady
+      || !allowOnlineAi
+      || isExplainingNotebook
+      || explainingCellIndex !== null
+    ) {
+      return;
+    }
+
+    const focusedContext = buildNotebookCellContext(notebook, cellResults, targetCellIndex);
+    if (!focusedContext.trim()) return;
+    const requestId = ++cellExplanationRequestId.current;
+    setAiCellExplanationErrors(previous => {
+      const next = { ...previous };
+      delete next[targetCellIndex];
+      return next;
+    });
+    setExplainingCellIndex(targetCellIndex);
+    try {
+      const result = await explainNotebookCells.mutateAsync({
+        data: {
+          providerId: aiSettings.providerId,
+          modelId: activeAiModelId,
+          profile: aiSettings.profile,
+          notebookContext: focusedContext,
+          targetCellIndex,
+        },
+      });
+      if (requestId !== cellExplanationRequestId.current) return;
+      const explanation = result.explanations.find((item) => item.cellIndex === targetCellIndex);
+      if (!explanation) {
+        throw new Error("Модель не вернула пояснение выбранной ячейки.");
+      }
+      setAiCellExplanations(previous => ({
+        ...previous,
+        [targetCellIndex]: {
+          explanation: explanation.explanation,
+          modelId: result.modelId,
+        },
+      }));
+    } catch (error) {
+      if (requestId !== cellExplanationRequestId.current) return;
+      setAiCellExplanationErrors(previous => ({
+        ...previous,
+        [targetCellIndex]: error instanceof Error && error.message.trim()
+          ? error.message
+          : "Не удалось получить пояснение. Проверьте подключение ИИ и попробуйте ещё раз.",
+      }));
+    } finally {
+      if (requestId === cellExplanationRequestId.current) setExplainingCellIndex(null);
     }
   };
 
@@ -929,14 +993,15 @@ export default function Home() {
             <div className="flex justify-end">
               <Button
                 variant="outline"
-                onClick={() => void handleExplainNotebookCells()}
-                disabled={!aiReady || !allowOnlineAi || isExplainingCells || !notebookContext.trim()}
-                data-testid="button-explain-cells-with-ai"
+                size="sm"
+                onClick={() => void handleExplainEntireNotebook()}
+                disabled={!aiReady || !allowOnlineAi || isExplainingNotebook || explainingCellIndex !== null || !notebookContext.trim()}
+                data-testid="button-explain-entire-notebook"
               >
-                {isExplainingCells
+                {isExplainingNotebook
                   ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
                   : <Sparkles className="mr-2 h-4 w-4" aria-hidden="true" />}
-                {isExplainingCells ? "ИИ поясняет ячейки…" : "Пояснить ячейки с ИИ"}
+                {isExplainingNotebook ? "ИИ поясняет ноутбук…" : "Пояснить весь блокнот"}
               </Button>
             </div>
 
@@ -1008,12 +1073,14 @@ export default function Home() {
                               className="m-0"
                               data-testid={`text-cell-explanation-${index}`}
                             >
-                              <span className="font-medium text-foreground">Смысл ячейки: </span>
-                              {aiCellExplanations[index] ?? explainNotebookCell(cell, index, notebook)}
+                              <span className="font-medium text-foreground">
+                                {aiCellExplanations[index] ? "Пояснение ИИ: " : "Смысл ячейки: "}
+                              </span>
+                              {aiCellExplanations[index]?.explanation ?? explainNotebookCell(cell, index, notebook)}
                             </p>
                             {aiCellExplanations[index] && (
                               <p className="mt-2 text-xs text-muted-foreground" data-testid={`text-ai-cell-explanation-source-${index}`}>
-                                Пояснение ИИ · {aiCellExplanationModel}
+                                Модель: {aiCellExplanations[index].modelId}
                               </p>
                             )}
                             {libraryExplanations.length > 0 && !aiCellExplanations[index] && (
@@ -1033,6 +1100,30 @@ export default function Home() {
                                   ))}
                                 </ul>
                               </div>
+                            )}
+                            <div className="mt-3 flex flex-wrap items-center justify-end gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => void handleAskAiAboutCell(index)}
+                                disabled={!aiReady || !allowOnlineAi || isExplainingNotebook || explainingCellIndex !== null}
+                                aria-label={`Спросить ИИ об этой ячейке ${index + 1}`}
+                                data-testid={`button-ask-ai-cell-${index}`}
+                              >
+                                {explainingCellIndex === index
+                                  ? <Loader2 className="mr-2 h-4 w-4 animate-spin" aria-hidden="true" />
+                                  : <Sparkles className="mr-2 h-4 w-4" aria-hidden="true" />}
+                                {explainingCellIndex === index
+                                  ? "ИИ поясняет…"
+                                  : aiCellExplanations[index]
+                                    ? "Спросить ИИ ещё раз"
+                                    : "Спросить ИИ об этой ячейке"}
+                              </Button>
+                            </div>
+                            {aiCellExplanationErrors[index] && (
+                              <p className="mt-2 text-sm text-destructive" role="alert" data-testid={`alert-ai-cell-${index}`}>
+                                {aiCellExplanationErrors[index]}
+                              </p>
                             )}
                           </div>
                         </div>
