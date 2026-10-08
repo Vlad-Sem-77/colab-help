@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { LoaderCircle, Mic, Square, Volume2 } from "lucide-react";
+import { LoaderCircle, Mic, Pause, Play, Square, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { AiProviderId } from "@/lib/ai-settings";
 
@@ -153,24 +153,20 @@ type SpeechPlaybackButtonProps = {
 export function SpeechPlaybackButton({ providerId, text }: SpeechPlaybackButtonProps) {
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [playing, setPlaying] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const audioRef = useRef<HTMLAudioElement>(null);
 
-  useEffect(() => () => {
-    if (audioUrl) URL.revokeObjectURL(audioUrl);
+  useEffect(() => {
+    const currentUrl = audioUrl;
+    return () => {
+      audioRef.current?.pause();
+      if (currentUrl) URL.revokeObjectURL(currentUrl);
+    };
   }, [audioUrl]);
 
   const speak = async () => {
     setErrorMessage("");
-    if (audioUrl) {
-      const player = audioRef.current;
-      if (player) {
-        player.currentTime = 0;
-        void player.play().catch(() => setErrorMessage("Нажмите воспроизведение в аудиоплеере."));
-      }
-      return;
-    }
-
     setLoading(true);
     try {
       const response = await fetch("/api/ai/voice/speech", {
@@ -193,34 +189,96 @@ export function SpeechPlaybackButton({ providerId, text }: SpeechPlaybackButtonP
     }
   };
 
+  const play = async () => {
+    const player = audioRef.current;
+    if (!player) return;
+    setErrorMessage("");
+    try {
+      await player.play();
+    } catch {
+      setErrorMessage("Не удалось начать воспроизведение. Нажмите «Играть ответ» ещё раз.");
+    }
+  };
+
+  const pause = () => audioRef.current?.pause();
+
+  const stop = () => {
+    const player = audioRef.current;
+    if (!player) return;
+    player.pause();
+    player.currentTime = 0;
+  };
+
   return (
     <div className="mt-3 space-y-2">
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        disabled={loading}
-        onClick={() => void speak()}
-        data-testid="button-speak-assistant-answer"
-        className="h-7 border-[#d5e2d9] bg-white px-2.5 text-xs text-[#285d47] hover:bg-[#eaf2ed]"
-      >
-        {loading ? (
-          <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-        ) : (
-          <Volume2 className="h-3.5 w-3.5" aria-hidden="true" />
-        )}
-        {loading ? "Готовлю аудио…" : audioUrl ? "Повторить ответ" : "Озвучить ответ"}
-      </Button>
-      {audioUrl && (
-        <audio
-          ref={audioRef}
-          src={audioUrl}
-          controls
-          preload="none"
-          className="h-9 max-w-full"
-          aria-label="Озвученный ответ ИИ"
-          data-testid="audio-assistant-answer"
-        />
+      {!audioUrl ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={loading}
+          onClick={() => void speak()}
+          data-testid="button-speak-assistant-answer"
+          className="h-7 border-[#d5e2d9] bg-white px-2.5 text-xs text-[#285d47] hover:bg-[#eaf2ed]"
+        >
+          {loading ? (
+            <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+          ) : (
+            <Volume2 className="h-3.5 w-3.5" aria-hidden="true" />
+          )}
+          {loading ? "Готовлю аудио…" : "Озвучить ответ"}
+        </Button>
+      ) : (
+        <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Управление озвученным ответом">
+          <audio
+            ref={audioRef}
+            src={audioUrl}
+            preload="none"
+            className="sr-only"
+            aria-hidden="true"
+            onPlay={() => setPlaying(true)}
+            onPause={() => setPlaying(false)}
+            onEnded={() => setPlaying(false)}
+            data-testid="audio-assistant-answer"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void play()}
+            data-testid="button-play-assistant-answer"
+            aria-label="Играть ответ"
+            className="h-8 border-[#d5e2d9] bg-white px-3 text-xs text-[#285d47] hover:bg-[#eaf2ed]"
+          >
+            <Play className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+            Играть
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={pause}
+            disabled={!playing}
+            data-testid="button-pause-assistant-answer"
+            aria-label="Пауза"
+            className="h-8 border-[#d5e2d9] bg-white px-3 text-xs text-[#285d47] hover:bg-[#eaf2ed]"
+          >
+            <Pause className="h-3.5 w-3.5" aria-hidden="true" />
+            Пауза
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={stop}
+            data-testid="button-stop-assistant-answer"
+            aria-label="Стоп"
+            className="h-8 border-[#d5e2d9] bg-white px-3 text-xs text-[#285d47] hover:bg-[#eaf2ed]"
+          >
+            <Square className="h-3.5 w-3.5 fill-current" aria-hidden="true" />
+            Стоп
+          </Button>
+        </div>
       )}
       {errorMessage && <p className="text-xs text-rose-700" role="alert">{errorMessage}</p>}
     </div>

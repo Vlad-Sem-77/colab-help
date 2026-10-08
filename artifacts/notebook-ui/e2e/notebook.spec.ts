@@ -126,6 +126,7 @@ test("keeps the provider key in the server browser session and supports voice qu
   let analyzeCookie = "";
   let connectResponseIncludedKey = false;
   let transcribedAudioType = "";
+  let speechGenerationRequests = 0;
 
   await page.addInitScript(() => {
     Object.defineProperty(navigator, "mediaDevices", {
@@ -151,6 +152,19 @@ test("keeps the provider key in the server browser session and supports voice qu
       }
     }
     Object.defineProperty(window, "MediaRecorder", { configurable: true, value: FakeMediaRecorder });
+    Object.defineProperty(HTMLMediaElement.prototype, "play", {
+      configurable: true,
+      value: function (this: HTMLMediaElement) {
+        this.dispatchEvent(new Event("play"));
+        return Promise.resolve();
+      },
+    });
+    Object.defineProperty(HTMLMediaElement.prototype, "pause", {
+      configurable: true,
+      value: function (this: HTMLMediaElement) {
+        this.dispatchEvent(new Event("pause"));
+      },
+    });
   });
   await page.reload();
   page.on("request", (request) => {
@@ -174,6 +188,7 @@ test("keeps the provider key in the server browser session and supports voice qu
     await route.fulfill({ json: { text: "Что делает этот ноутбук?" } });
   });
   await page.route("**/api/ai/voice/speech", async (route) => {
+    speechGenerationRequests += 1;
     await route.fulfill({
       status: 200,
       contentType: "audio/mpeg",
@@ -234,7 +249,23 @@ test("keeps the provider key in the server browser session and supports voice qu
   expect(analyzeCookie).toContain("notebook.sid=mock-session");
   expect(keyAppearedOutsideConnect).toBe(false);
   await page.getByTestId("button-speak-assistant-answer").click();
-  await expect(page.getByTestId("audio-assistant-answer")).toBeVisible();
+  await expect(page.getByTestId("audio-assistant-answer")).toHaveAttribute("src", /^blob:/);
+  await expect(page.getByTestId("button-play-assistant-answer")).toBeVisible();
+  const cachedAudioUrl = await page.getByTestId("audio-assistant-answer").getAttribute("src");
+  expect(speechGenerationRequests).toBe(1);
+  await page.getByTestId("button-play-assistant-answer").click();
+  await expect(page.getByTestId("button-pause-assistant-answer")).toBeEnabled();
+  await page.getByTestId("button-pause-assistant-answer").click();
+  await expect(page.getByTestId("button-pause-assistant-answer")).toBeDisabled();
+  await page.getByTestId("audio-assistant-answer").evaluate((audio) => {
+    Object.defineProperty(audio, "currentTime", { configurable: true, writable: true, value: 12 });
+  });
+  await page.getByTestId("button-stop-assistant-answer").click();
+  await expect(page.getByTestId("audio-assistant-answer")).toHaveJSProperty("currentTime", 0);
+  await page.getByTestId("button-play-assistant-answer").click();
+  await expect(page.getByTestId("button-pause-assistant-answer")).toBeEnabled();
+  await expect(page.getByTestId("audio-assistant-answer")).toHaveAttribute("src", cachedAudioUrl ?? "");
+  expect(speechGenerationRequests).toBe(1);
 
   await page.reload();
   await page.getByTestId("input-upload-notebook").setInputFiles(notebookFixture);
