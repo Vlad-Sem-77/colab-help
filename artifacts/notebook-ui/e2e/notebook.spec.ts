@@ -62,6 +62,90 @@ test("uploads notebook text, parameters and saved results with the notebook help
     .toContainText("Этот текст описывает подготовку данных.");
 });
 
+test("clears the previous notebook state after a successful replacement", async ({ page }) => {
+  const runRequests: unknown[] = [];
+  await page.route("**/api/colab/run", async route => {
+    runRequests.push(route.request().postDataJSON());
+    await route.fulfill({
+      json: {
+        status: "ok",
+        taskType: "text_generation",
+        mode: "auto",
+        result: "Результат запуска первого блокнота",
+        error: null,
+      },
+    });
+  });
+  await page.route("**/api/colab/analyze-notebook", async route => {
+    await route.fulfill({
+      json: { answer: "Ответ помощника по первому блокноту", model: "test-model" },
+    });
+  });
+
+  await page.getByTestId("input-colab-url").fill("https://example.trycloudflare.com");
+  await page.getByTestId("input-upload-notebook").setInputFiles(notebookFixture);
+  await page.getByTestId("parameter-prompt").fill("Пользовательский запрос первого блокнота");
+  await page.getByTestId("button-run-cell-1").click();
+  await expect(page.getByTestId("result-live-browser-parameters"))
+    .toContainText("Результат запуска первого блокнота");
+  expect(JSON.stringify(runRequests))
+    .toContain("Пользовательский запрос первого блокнота");
+
+  await page.getByTestId("input-notebook-question").fill("Что происходит в ячейке 1?");
+  await page.getByTestId("button-send-notebook-question").click();
+  await expect(page.getByTestId("message-notebook-assistant-1"))
+    .toContainText("Этот текст описывает подготовку данных.");
+
+  await page.getByTestId("input-assistant-question").fill("Объясни первый блокнот");
+  await page.getByTestId("button-submit-assistant-question").click();
+  await expect(page.getByTestId("text-message-content-1"))
+    .toContainText("Ответ помощника по первому блокноту");
+
+  const replacement = notebookFile("second-notebook.ipynb", JSON.stringify({
+    cells: [
+      {
+        cell_type: "markdown",
+        id: "browser-intro",
+        source: ["# Второй блокнот\n\nСодержимое второго документа."],
+      },
+      {
+        cell_type: "code",
+        id: "browser-parameters",
+        source: ['prompt = "Запрос второго блокнота"\n', "temperature = 0.4"],
+        outputs: [],
+      },
+      {
+        cell_type: "code",
+        id: "saved-result",
+        execution_count: 1,
+        source: ['print("Второй")'],
+        outputs: [{
+          output_type: "stream",
+          name: "stdout",
+          text: ["Результат второго блокнота\n"],
+        }],
+      },
+    ],
+  }));
+  await page.getByTestId("input-replace-notebook").setInputFiles(replacement);
+
+  await expect(page.locator('[data-notebook-cell-type="markdown"]'))
+    .toContainText("Содержимое второго документа.");
+  await expect(page.getByTestId("parameter-prompt"))
+    .toHaveValue("Запрос второго блокнота");
+  await expect(page.getByTestId("text-cell-output-saved-result-0"))
+    .toContainText("Результат второго блокнота");
+  await expect(page.getByTestId("result-live-browser-parameters")).toHaveCount(0);
+  await expect(page.getByText("Сохранённый результат: 12 строк")).toHaveCount(0);
+  await expect(page.getByText("Пользовательский запрос первого блокнота")).toHaveCount(0);
+  await expect(page.getByTestId("message-notebook-user-0")).toHaveCount(0);
+  await expect(page.getByTestId("message-notebook-assistant-1")).toHaveCount(0);
+  await expect(page.getByTestId("empty-assistant-conversation")).toBeVisible();
+  await expect(page.getByTestId("message-assistant-user-0")).toHaveCount(0);
+  await expect(page.getByTestId("message-assistant-assistant-1")).toHaveCount(0);
+  await expect(page.getByTestId("input-assistant-question")).toHaveValue("");
+});
+
 test("explains why malformed notebook files cannot be opened", async ({ page }) => {
   const notifications = page.getByRole("region", { name: "Notifications (F8)" });
   const malformedFiles = [
