@@ -15,6 +15,7 @@ import { NotebookAssistant } from "@/components/notebook-assistant";
 import { AiProviderSettings } from "@/components/ai-provider-settings";
 import { getListAiProvidersQueryKey, useListAiModels, useListAiProviders } from "@workspace/api-client-react";
 import type { AiSettings } from "@/lib/ai-settings";
+import { getDefaultAiModelId, getSelectableAiModels } from "@/lib/ai-model-selection";
 import {
   getActiveAiModelId,
   readSavedAiSettings,
@@ -386,8 +387,15 @@ export default function Home() {
       },
     },
   );
+  const modelsForSelectedProvider = aiModelsQuery.data?.providerId === aiSettings.providerId
+    ? aiModelsQuery.data.models
+    : [];
+  const selectableAiModels = useMemo(
+    () => getSelectableAiModels(aiSettings.providerId, modelsForSelectedProvider),
+    [aiSettings.providerId, modelsForSelectedProvider],
+  );
   const activeAiModelId = getActiveAiModelId(aiSettings);
-  const aiModelIsAvailable = aiModelsQuery.data?.models.some((model) => model.id === activeAiModelId) ?? false;
+  const aiModelIsAvailable = selectableAiModels.some((model) => model.id === activeAiModelId);
   const aiReady = Boolean(selectedAiProvider?.hasSessionKey && activeAiModelId && aiModelIsAvailable);
 
   const { toast } = useToast();
@@ -434,6 +442,34 @@ export default function Home() {
     }
     setAiSettings(nextSettings);
   };
+
+  useEffect(() => {
+    if (
+      !aiModelsQuery.isSuccess
+      || aiModelsQuery.data?.providerId !== aiSettings.providerId
+      || selectableAiModels.length === 0
+    ) {
+      return;
+    }
+
+    const nextReviewModelId = selectableAiModels.some((model) => model.id === aiSettings.reviewModelId)
+      ? aiSettings.reviewModelId
+      : getDefaultAiModelId(aiSettings.providerId, selectableAiModels, "review");
+    const nextEconomyModelId = selectableAiModels.some((model) => model.id === aiSettings.economyModelId)
+      ? aiSettings.economyModelId
+      : getDefaultAiModelId(aiSettings.providerId, selectableAiModels, "economy");
+
+    if (
+      nextReviewModelId !== aiSettings.reviewModelId
+      || nextEconomyModelId !== aiSettings.economyModelId
+    ) {
+      handleAiSettingsChange({
+        ...aiSettings,
+        reviewModelId: nextReviewModelId,
+        economyModelId: nextEconomyModelId,
+      });
+    }
+  }, [aiModelsQuery.data, aiModelsQuery.isSuccess, aiSettings, selectableAiModels]);
 
   const connectProviderKey = async (apiKey: string) => {
     const providerId = aiSettings.providerId;
@@ -786,7 +822,7 @@ export default function Home() {
             <AiProviderSettings
               settings={aiSettings}
               providers={aiProvidersQuery.data?.providers ?? []}
-              models={aiModelsQuery.data?.models ?? []}
+              models={selectableAiModels}
               providersLoading={aiProvidersQuery.isLoading}
               modelsLoading={aiModelsQuery.isLoading}
               catalogError={aiModelsQuery.isError}

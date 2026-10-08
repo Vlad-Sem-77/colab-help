@@ -15,47 +15,56 @@ function notebookFile(name: string, content: string) {
 
 test.beforeEach(async ({ page }) => {
   await page.route("**/api/ai/providers", async route => {
-    const hasSessionKey = route.request().headers().cookie?.includes("notebook.sid=mock-session") ?? false;
+    const cookie = route.request().headers().cookie ?? "";
     await route.fulfill({
       json: {
         providers: [
-          { id: "aitunnel", name: "AI Tunnel", catalogRequiresKey: false, hasSessionKey, voiceInputAvailable: true, voiceOutputAvailable: true, transcriptionModelId: "whisper-1", speechModelId: "gpt-4o-mini-tts" },
-          { id: "proxyapi", name: "ProxyAPI", catalogRequiresKey: true, hasSessionKey: false, voiceInputAvailable: true, voiceOutputAvailable: true, transcriptionModelId: "openai/gpt-4o-mini-transcribe", speechModelId: "openai/gpt-4o-mini-tts" },
-          { id: "routerai", name: "RouterAI", catalogRequiresKey: false, hasSessionKey: false, voiceInputAvailable: true, voiceOutputAvailable: true, transcriptionModelId: "x-ai/grok-stt-1.0", speechModelId: "qwen/qwen-audio-3.0-tts-plus" },
-          { id: "openai", name: "OpenAI", catalogRequiresKey: true, hasSessionKey: false, voiceInputAvailable: true, voiceOutputAvailable: true, transcriptionModelId: "gpt-4o-mini-transcribe", speechModelId: "gpt-4o-mini-tts" },
+          { id: "aitunnel", name: "AI Tunnel", catalogRequiresKey: false, hasSessionKey: cookie.includes("notebook.sid=mock-aitunnel"), voiceInputAvailable: true, voiceOutputAvailable: true, transcriptionModelId: "whisper-1", speechModelId: "gpt-4o-mini-tts" },
+          { id: "proxyapi", name: "ProxyAPI", catalogRequiresKey: true, hasSessionKey: cookie.includes("notebook.sid=mock-proxyapi"), voiceInputAvailable: true, voiceOutputAvailable: true, transcriptionModelId: "openai/gpt-4o-mini-transcribe", speechModelId: "openai/gpt-4o-mini-tts" },
+          { id: "routerai", name: "RouterAI", catalogRequiresKey: false, hasSessionKey: cookie.includes("notebook.sid=mock-routerai"), voiceInputAvailable: true, voiceOutputAvailable: true, transcriptionModelId: "x-ai/grok-stt-1.0", speechModelId: "qwen/qwen-audio-3.0-tts-plus" },
+          { id: "openai", name: "OpenAI", catalogRequiresKey: true, hasSessionKey: cookie.includes("notebook.sid=mock-openai"), voiceInputAvailable: true, voiceOutputAvailable: true, transcriptionModelId: "gpt-4o-mini-transcribe", speechModelId: "gpt-4o-mini-tts" },
         ],
       },
     });
   });
   await page.route("**/api/ai/credentials/connect", async route => {
+    const body = route.request().postDataJSON() as { providerId?: string };
+    const providerId = body.providerId ?? "aitunnel";
     await route.fulfill({
       status: 200,
-      headers: { "Set-Cookie": "notebook.sid=mock-session; Path=/api; HttpOnly; SameSite=Strict" },
-      json: { providerId: "aitunnel", connected: true },
+      headers: { "Set-Cookie": `notebook.sid=mock-${providerId}; Path=/api; HttpOnly; SameSite=Strict` },
+      json: { providerId, connected: true },
     });
   });
   await page.route("**/api/ai/models**", async route => {
     const providerId = new URL(route.request().url()).searchParams.get("providerId") ?? "aitunnel";
+    const aitunnelModels = [
+      ["qwen/qwen3.8-flash", 30, 94],
+      ["deepseek/deepseek-v4-flash", 1.14, 256],
+      ["anthropic/claude-haiku-5.5", 20, 100],
+      ["z-ai/glm-5.3-flash", 30, 100],
+      ["google/gemini-3.8-flash", 150, 750],
+      ["openai/gpt-6.1-sol", 400, 2000],
+      ["anthropic/claude-opus-5.5", 800, 4000],
+      ["deepseek/deepseek-v4-pro", 58.464, 116.928],
+    ].map(([id, inputPricePerMillion, outputPricePerMillion]) => ({
+      id: String(id),
+      name: String(id),
+      inputPricePerMillion: Number(inputPricePerMillion),
+      outputPricePerMillion: Number(outputPricePerMillion),
+      currency: "RUB",
+    }));
+    const providerModels: Record<string, Array<{ id: string; name: string }>> = {
+      proxyapi: [{ id: "anthropic/claude-sonnet-4.6", name: "Claude Sonnet 4.6" }],
+      routerai: [{ id: "deepseek/deepseek-v4-pro", name: "DeepSeek V4 Pro" }],
+      openai: [{ id: "gpt-5.3-codex", name: "GPT-5.3 Codex" }],
+    };
+    const models = providerId === "aitunnel" ? aitunnelModels : providerModels[providerId] ?? [];
     await route.fulfill({
       json: {
         providerId,
-        count: 2,
-        models: [
-          {
-            id: "openai/gpt-6.1-sol",
-            name: "openai/gpt-6.1-sol",
-            inputPricePerMillion: 400,
-            outputPricePerMillion: 2000,
-            currency: "RUB",
-          },
-          {
-            id: "qwen/qwen3.8-flash",
-            name: "qwen/qwen3.8-flash",
-            inputPricePerMillion: 30,
-            outputPricePerMillion: 94,
-            currency: "RUB",
-          },
-        ],
+        count: models.length,
+        models,
       },
     });
   });
@@ -113,6 +122,44 @@ test("uses the selected notebook theme for provider dropdowns", async ({ page })
   await expect(windowsListbox).toBeVisible();
   await expect.poll(() => windowsListbox.evaluate((element) => getComputedStyle(element).backgroundColor))
     .toBe("rgb(222, 222, 222)");
+});
+
+test("shows a short AI Tunnel list and model choices for other providers", async ({ page }) => {
+  await page.getByTestId("input-upload-notebook").setInputFiles(notebookFixture);
+
+  const reviewModelSelect = page.getByTestId("select-ai-model-review");
+  await reviewModelSelect.click();
+  await expect(page.getByText("Быстрые и недорогие")).toBeVisible();
+  await expect(page.getByText("Сильные для кодинга")).toBeVisible();
+  await expect(page.getByRole("option")).toHaveCount(8);
+  await page.keyboard.press("Escape");
+
+  const providerSelect = page.getByTestId("select-ai-provider");
+  await providerSelect.click();
+  await expect(page.getByRole("option", { name: "ProxyAPI", exact: true })).toBeVisible();
+  await page.getByRole("option", { name: "ProxyAPI", exact: true }).click();
+  await expect(providerSelect).toContainText("ProxyAPI");
+  await expect(reviewModelSelect).toBeDisabled();
+  await expect(page.getByTestId("text-ai-provider-key-missing"))
+    .toContainText("подключите его ключ");
+
+  await page.getByTestId("input-ai-provider-key").fill("test-proxyapi-session-key");
+  await page.getByTestId("button-use-ai-provider-key").click();
+  await expect(reviewModelSelect).toBeEnabled();
+  await expect(reviewModelSelect).toContainText("anthropic/claude-sonnet-4.6");
+  await reviewModelSelect.click();
+  await expect(page.getByRole("option", { name: /anthropic\/claude-sonnet-4\.6/ }))
+    .toBeVisible();
+  await page.getByRole("option", { name: /anthropic\/claude-sonnet-4\.6/ }).click();
+  await expect(reviewModelSelect).toContainText("anthropic/claude-sonnet-4.6");
+
+  await providerSelect.click();
+  await page.getByRole("option", { name: "RouterAI", exact: true }).click();
+  await expect(reviewModelSelect).toBeEnabled();
+  await expect(reviewModelSelect).toContainText("deepseek/deepseek-v4-pro");
+  await reviewModelSelect.click();
+  await expect(page.getByRole("option", { name: /deepseek\/deepseek-v4-pro/ }))
+    .toBeVisible();
 });
 
 test("uploads notebook text, parameters and saved results with the notebook helpers", async ({ page }) => {
@@ -198,7 +245,7 @@ test("keeps the provider key in the server browser session and supports voice qu
     connectResponseIncludedKey = JSON.stringify(responseBody).includes(testSessionKey);
     await route.fulfill({
       status: 200,
-      headers: { "Set-Cookie": "notebook.sid=mock-session; Path=/api; HttpOnly; SameSite=Strict" },
+      headers: { "Set-Cookie": "notebook.sid=mock-aitunnel; Path=/api; HttpOnly; SameSite=Strict" },
       json: responseBody,
     });
   });
@@ -265,7 +312,7 @@ test("keeps the provider key in the server browser session and supports voice qu
   await expect(page.getByTestId("text-message-content-1"))
     .toContainText("Ответ ИИ по модели qwen/qwen3.8-flash");
   expect(analyzeSentKeyHeader).toBe(false);
-  expect(analyzeCookie).toContain("notebook.sid=mock-session");
+  expect(analyzeCookie).toContain("notebook.sid=mock-aitunnel");
   expect(keyAppearedOutsideConnect).toBe(false);
   await page.getByTestId("button-speak-assistant-answer").click();
   await expect(page.getByTestId("audio-assistant-answer")).toHaveAttribute("src", /^blob:/);

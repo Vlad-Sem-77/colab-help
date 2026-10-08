@@ -3,8 +3,9 @@ import { Settings2 } from "lucide-react";
 import type { AiModel, AiProvider } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { AiSettings, AiProfile } from "@/lib/ai-settings";
+import { getAiModelGroups } from "@/lib/ai-model-selection";
 
 interface AiProviderSettingsProps {
   settings: AiSettings;
@@ -44,14 +45,40 @@ export function AiProviderSettings({
   const [connectionPending, setConnectionPending] = useState(false);
   const [connectionError, setConnectionError] = useState("");
   const provider = providers.find((item) => item.id === settings.providerId);
-  useEffect(() => setApiKeyDraft(""), [settings.providerId]);
-  const filteredModels = useMemo(() => {
+  useEffect(() => {
+    setApiKeyDraft("");
+    setFilter("");
+  }, [settings.providerId]);
+  const modelGroups = useMemo(
+    () => getAiModelGroups(settings.providerId, models),
+    [settings.providerId, models],
+  );
+  const filteredModelGroups = useMemo(() => {
     const normalizedFilter = filter.trim().toLocaleLowerCase();
-    if (!normalizedFilter) return models;
-    return models.filter((model) =>
-      `${model.id} ${model.name} ${model.ownedBy ?? ""}`.toLocaleLowerCase().includes(normalizedFilter),
-    );
-  }, [filter, models]);
+    return modelGroups
+      .map((group) => ({
+        ...group,
+        models: normalizedFilter
+          ? group.models.filter((model) =>
+              `${model.id} ${model.name} ${model.ownedBy ?? ""}`.toLocaleLowerCase().includes(normalizedFilter),
+            )
+          : group.models,
+      }))
+      .filter((group) => group.models.length > 0);
+  }, [filter, modelGroups]);
+  const hasModelChoices = modelGroups.some((group) => group.models.length > 0);
+  const catalogNeedsKey = Boolean(provider?.catalogRequiresKey && !sessionKeyActive);
+  const modelSelectPlaceholder = catalogNeedsKey
+    ? "Подключите ключ ниже"
+    : modelsLoading
+      ? "Загрузка каталога…"
+      : catalogError
+        ? "Не удалось загрузить каталог"
+        : hasModelChoices
+          ? "Выберите модель из каталога"
+          : settings.providerId === "aitunnel"
+            ? "Нет рекомендованных моделей"
+            : "Нет доступных моделей";
 
   const updateSettings = (patch: Partial<AiSettings>) => onChange({ ...settings, ...patch });
   const updateModel = (profile: AiProfile, modelId: string) => {
@@ -86,19 +113,34 @@ export function AiProviderSettings({
   };
 
   const renderModelSelect = (profile: AiProfile, value: string, label: string) => (
-    <label className="space-y-1.5 text-xs font-medium">
+    <label className="min-w-0 space-y-1.5 text-xs font-medium">
       <span>{label}</span>
-      <Select value={value || undefined} onValueChange={(modelId) => updateModel(profile, modelId)}>
-        <SelectTrigger aria-label={label} data-testid={`select-ai-model-${profile}`}>
-          <SelectValue placeholder={modelsLoading ? "Загрузка каталога…" : "Выберите модель из каталога"} />
+      <Select
+        value={models.some((model) => model.id === value) ? value : undefined}
+        onValueChange={(modelId) => updateModel(profile, modelId)}
+        disabled={catalogNeedsKey || modelsLoading || !hasModelChoices}
+      >
+        <SelectTrigger className="min-w-0 max-w-full" aria-label={label} data-testid={`select-ai-model-${profile}`}>
+          <SelectValue className="min-w-0 flex-1" placeholder={modelSelectPlaceholder} />
         </SelectTrigger>
         <SelectContent>
-          {filteredModels.map((model) => (
-            <SelectItem key={model.id} value={model.id}>
-              <span className="font-mono text-xs">{model.id}</span>
-              <span className="ml-2 text-muted-foreground">{formatModelPrice(model)}</span>
+          {filteredModelGroups.length ? filteredModelGroups.map((group) => (
+            <SelectGroup key={group.id}>
+              {group.label && (
+                <SelectLabel className="text-xs text-muted-foreground">{group.label}</SelectLabel>
+              )}
+              {group.models.map((model) => (
+                <SelectItem key={model.id} value={model.id}>
+                  <span className="font-mono text-xs">{model.id}</span>
+                  <span className="ml-2 text-muted-foreground">{formatModelPrice(model)}</span>
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          )) : (
+            <SelectItem value="no-models-match-filter" disabled>
+              Нет моделей по этому запросу
             </SelectItem>
-          ))}
+          )}
         </SelectContent>
       </Select>
     </label>
@@ -111,19 +153,17 @@ export function AiProviderSettings({
         <h2 className="text-sm font-semibold">ИИ-провайдер и модели</h2>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
-        <label className="space-y-1.5 text-xs font-medium">
+        <label className="min-w-0 space-y-1.5 text-xs font-medium">
           <span>Провайдер</span>
           <Select
             value={settings.providerId}
             onValueChange={(providerId: AiSettings["providerId"]) => onChange({
               ...settings,
               providerId,
-              reviewModelId: "",
-              economyModelId: "",
             })}
           >
-            <SelectTrigger aria-label="Провайдер ИИ" data-testid="select-ai-provider">
-              <SelectValue placeholder={providersLoading ? "Загрузка…" : "Выберите провайдера"} />
+            <SelectTrigger className="min-w-0 max-w-full" aria-label="Провайдер ИИ" data-testid="select-ai-provider">
+              <SelectValue className="min-w-0 flex-1" placeholder={providersLoading ? "Загрузка…" : "Выберите провайдера"} />
             </SelectTrigger>
             <SelectContent>
               {providers.map((item) => (
@@ -134,14 +174,14 @@ export function AiProviderSettings({
             </SelectContent>
           </Select>
         </label>
-        <label className="space-y-1.5 text-xs font-medium">
+        <label className="min-w-0 space-y-1.5 text-xs font-medium">
           <span>Профиль для следующего вопроса</span>
           <Select
             value={settings.profile}
             onValueChange={(profile: AiProfile) => updateSettings({ profile })}
           >
-            <SelectTrigger aria-label="Профиль модели" data-testid="select-ai-profile">
-              <SelectValue />
+            <SelectTrigger className="min-w-0 max-w-full" aria-label="Профиль модели" data-testid="select-ai-profile">
+              <SelectValue className="min-w-0 flex-1" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="review">Тщательная проверка</SelectItem>
@@ -204,7 +244,7 @@ export function AiProviderSettings({
       <div className="mt-3 space-y-1 text-xs leading-5 text-muted-foreground" aria-live="polite">
         {provider?.catalogRequiresKey && !sessionKeyActive && (
           <p data-testid="text-ai-provider-key-missing">
-            Чтобы загрузить каталог моделей {provider.name}, введите ключ для этого сеанса. Для AI-запроса ключ понадобится у любого провайдера.
+            Чтобы загрузить каталог моделей {provider.name}, подключите его ключ для этого сеанса в поле ниже. Провайдера можно выбрать заранее.
           </p>
         )}
         {modelsLoading && <p>Загружаю актуальный список моделей выбранного провайдера…</p>}

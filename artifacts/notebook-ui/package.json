@@ -9,7 +9,7 @@
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "test": "pnpm run test:unit && pnpm run test:e2e",
     "test:e2e": "playwright test",
-    "test:unit": "node --experimental-strip-types --test src/lib/notebook.test.ts",
+    "test:unit": "node --experimental-strip-types --test src/lib/*.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
