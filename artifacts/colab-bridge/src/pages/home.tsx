@@ -106,27 +106,44 @@ export default function Home() {
     }
   });
 
-  const handlePing = () => {
-    if (!colabUrl) return toast({ title: "URL Required", description: "Please enter your Colab URL (trycloudflare.com)", variant: "destructive" });
+  const handlePing = (): void => {
+    if (!colabUrl) {
+      toast({ title: "URL Required", description: "Please enter your Colab URL (trycloudflare.com)", variant: "destructive" });
+      return;
+    }
     pingMutation.mutate({ data: { colabUrl } });
   };
 
-  const handleLoadModels = () => {
-    if (!colabUrl) return toast({ title: "URL Required", variant: "destructive" });
+  const handleLoadModels = (): void => {
+    if (!colabUrl) {
+      toast({ title: "URL Required", variant: "destructive" });
+      return;
+    }
     fetchModelsMutation.mutate({ data: { colabUrl } });
   };
 
-  const handleRun = () => {
-    if (!colabUrl) return toast({ title: "URL Required", variant: "destructive" });
-    if (!prompt.trim() && taskType !== 'custom_code') return toast({ title: "Prompt Required", variant: "destructive" });
-    if (taskType === 'custom_code' && !customCode.trim()) return toast({ title: "Code Required", variant: "destructive" });
+  const handleRun = (): void => {
+    if (!colabUrl) {
+      toast({ title: "URL Required", variant: "destructive" });
+      return;
+    }
+    if (!prompt.trim() && taskType !== 'custom_code') {
+      toast({ title: "Prompt Required", variant: "destructive" });
+      return;
+    }
+    if (taskType === 'custom_code' && !customCode.trim()) {
+      toast({ title: "Code Required", variant: "destructive" });
+      return;
+    }
     
     if (mode === 'manual' && taskType !== 'model_comparison' && !selectedModel) {
-      return toast({ title: "Model Required", description: "Select a model or switch to Auto mode", variant: "destructive" });
+      toast({ title: "Model Required", description: "Select a model or switch to Auto mode", variant: "destructive" });
+      return;
     }
 
     if (mode === 'manual' && taskType === 'model_comparison' && selectedModels.length < 2) {
-      return toast({ title: "Models Required", description: "Select at least 2 models for comparison", variant: "destructive" });
+      toast({ title: "Models Required", description: "Select at least 2 models for comparison", variant: "destructive" });
+      return;
     }
 
     runMutation.mutate({

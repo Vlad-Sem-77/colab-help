@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { exportNotebook, parseNotebook } from "./notebook.ts";
+import { buildNotebookContext } from "./notebook-context.ts";
 
 test("round-trips a standard notebook without dropping its metadata or saved outputs", () => {
   const original = {
@@ -74,4 +75,74 @@ test("round-trips the repository's Colab notebook metadata, cell IDs, counts, an
   const exported = JSON.parse(exportNotebook(parseNotebook(original), {}));
 
   assert.deepEqual(exported, original);
+});
+
+test("builds assistant context from cell source and readable saved output only", () => {
+  const notebook = parseNotebook({
+    cells: [
+      {
+        cell_type: "markdown",
+        source: ["# Цель\n", "Обучить классификатор."],
+        outputs: [],
+      },
+      {
+        cell_type: "code",
+        id: "training",
+        source: ["model.fit(data)\n"],
+        outputs: [
+          { output_type: "stream", text: ["Обучение завершено\n"] },
+          {
+            output_type: "execute_result",
+            data: {
+              "text/plain": ["accuracy = 0.94"],
+              "text/html": ["<table><tr><td>private html</td></tr></table>"],
+              "image/png": "cHJpdmF0ZSBpbWFnZQ==",
+            },
+          },
+        ],
+      },
+    ],
+  });
+
+  const context = buildNotebookContext(notebook, { training: "Текущая точность: 0.95" });
+
+  assert.match(context, /Обучить классификатор/);
+  assert.match(context, /model\.fit\(data\)/);
+  assert.match(context, /Обучение завершено/);
+  assert.match(context, /accuracy = 0\.94/);
+  assert.match(context, /Текущая точность: 0\.95/);
+  assert.doesNotMatch(context, /private html|cHJpdmF0ZSBpbWFnZQ==/);
+});
+
+test("caps notebook context and marks when content was omitted", () => {
+  const notebook = parseNotebook({
+    cells: [{ cell_type: "code", source: ["🙂".repeat(100)], outputs: [] }],
+  });
+
+  const context = buildNotebookContext(notebook, {}, 80);
+
+  assert.ok(context.length <= 80);
+  assert.match(context, /Контекст сокращён/);
+  assert.equal(/[\uD800-\uDBFF]$/.test(context), false);
+});
+
+test("returns a readable note for notebooks without cells", () => {
+  assert.match(buildNotebookContext(parseNotebook({ cells: [] })), /не содержит текстовых ячеек/);
+});
+
+test("rejects JSON that does not have the structure of a notebook", () => {
+  assert.throws(() => parseNotebook({ title: "not a notebook" }), /массивом cells/);
+  assert.throws(
+    () => parseNotebook({ cells: [{ cell_type: "code", source: ["ok"], outputs: {} }] }),
+    /outputs должно быть массивом/,
+  );
+});
+
+test("preserves raw notebook cells as readable text", () => {
+  const notebook = parseNotebook({
+    cells: [{ cell_type: "raw", source: "Raw cell contents", outputs: [] }],
+  });
+
+  assert.equal(notebook.cells[0].type, "raw");
+  assert.match(buildNotebookContext(notebook), /Raw cell contents/);
 });

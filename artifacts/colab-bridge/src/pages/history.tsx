@@ -48,7 +48,7 @@ export default function HistoryPage() {
         </div>
         <Button 
           variant="destructive" 
-          onClick={() => clearMutation.mutate({})}
+          onClick={() => clearMutation.mutate()}
           disabled={!history?.length || clearMutation.isPending}
           className="font-mono text-xs"
         >

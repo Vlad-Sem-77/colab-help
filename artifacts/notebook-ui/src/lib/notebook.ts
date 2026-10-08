@@ -1,4 +1,4 @@
-export type CellType = 'markdown' | 'code' | 'parameter';
+export type CellType = 'markdown' | 'code' | 'parameter' | 'raw';
 
 export interface ParamInfo {
   varName: string;
@@ -26,14 +26,33 @@ export interface Notebook {
 }
 
 export function parseNotebook(json: any): Notebook {
-  if (!json || !json.cells || !Array.isArray(json.cells)) {
-    return { cells: [] };
+  if (!json || typeof json !== 'object' || Array.isArray(json) || !Array.isArray(json.cells)) {
+    throw new Error("Файл не похож на Jupyter/Colab-блокнот: ожидался объект с массивом cells.");
   }
 
   const parsedCells = json.cells.map((c: any, i: number) => {
+    if (!c || typeof c !== 'object' || Array.isArray(c)) {
+      throw new Error(`Ячейка ${i + 1} должна быть JSON-объектом.`);
+    }
+    if (!['markdown', 'code', 'raw'].includes(c.cell_type)) {
+      throw new Error(`У ячейки ${i + 1} неизвестный тип: ${String(c.cell_type)}.`);
+    }
+
     const id = c.id || `cell-${i}`;
-    const sourceArray = Array.isArray(c.source) ? c.source : [c.source || ""];
-    const outputs = Array.isArray(c.outputs) ? c.outputs : [];
+    const sourceArray = typeof c.source === 'string'
+      ? [c.source]
+      : Array.isArray(c.source) && c.source.every((line: unknown) => typeof line === 'string')
+        ? c.source
+        : null;
+    if (!sourceArray) {
+      throw new Error(`У ячейки ${i + 1} поле source должно содержать текст.`);
+    }
+
+    const outputs = c.outputs === undefined ? [] : c.outputs;
+    if (!Array.isArray(outputs)) {
+      throw new Error(`У ячейки ${i + 1} поле outputs должно быть массивом.`);
+    }
+
     const commonFields = {
       id,
       source: sourceArray,
@@ -53,7 +72,7 @@ export function parseNotebook(json: any): Notebook {
         return { ...commonFields, type: 'code' };
       }
     }
-    return { ...commonFields, type: c.cell_type };
+    return { ...commonFields, type: 'raw' };
   });
 
   return {

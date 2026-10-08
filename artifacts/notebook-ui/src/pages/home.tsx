@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { Upload, Play, Download, Code, FileText, Settings2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { Notebook, NotebookCell, ParamInfo, parseNotebook, exportNotebook } from "@/lib/notebook";
+import { buildNotebookContext } from "@/lib/notebook-context";
+import { NotebookAssistant } from "@/components/notebook-assistant";
 import { useColabUrl } from "@/hooks/use-colab-url";
 import { useRunExperiment } from "@workspace/api-client-react";
 
@@ -24,6 +26,7 @@ function CellHeader({ index, type, executionCount, onRun, isRunning }: { index: 
         {type === 'markdown' && <Badge variant="secondary" className="bg-gray-800 text-gray-300"><FileText className="w-3 h-3 mr-1"/> Markdown</Badge>}
         {type === 'code' && <Badge variant="secondary" className="bg-blue-950 text-blue-300"><Code className="w-3 h-3 mr-1"/> Code</Badge>}
         {type === 'parameter' && <Badge variant="secondary" className="bg-orange-950 text-orange-300"><Settings2 className="w-3 h-3 mr-1"/> Parameters</Badge>}
+        {type === 'raw' && <Badge variant="secondary"><FileText className="w-3 h-3 mr-1"/> Raw</Badge>}
       </div>
       {(type === 'parameter' || type === 'code') && onRun && (
         <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={onRun} disabled={isRunning}>
@@ -222,10 +225,15 @@ export default function Home() {
   const [cellValues, setCellValues] = useState<Record<string, Record<string, any>>>({});
   const [cellResults, setCellResults] = useState<Record<string, any>>({});
   const [runningCells, setRunningCells] = useState<Record<string, boolean>>({});
+  const [notebookRevision, setNotebookRevision] = useState(0);
   
   const { colabUrl } = useColabUrl();
   const { toast } = useToast();
   const runExperiment = useRunExperiment();
+  const notebookContext = useMemo(
+    () => notebook ? buildNotebookContext(notebook, cellResults) : "",
+    [notebook, cellResults],
+  );
 
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -237,11 +245,23 @@ export default function Home() {
         const json = JSON.parse(ev.target?.result as string);
         const parsed = parseNotebook(json);
         setNotebook(parsed);
+        setNotebookRevision((revision) => revision + 1);
         setCellValues({});
         setCellResults({});
       } catch (err) {
-        toast({ title: "Error parsing notebook", variant: "destructive" });
+        toast({
+          title: "Не удалось прочитать блокнот",
+          description: err instanceof Error ? err.message : "Проверьте файл .ipynb.",
+          variant: "destructive",
+        });
       }
+    };
+    reader.onerror = () => {
+      toast({
+        title: "Не удалось прочитать файл",
+        description: "Попробуйте загрузить файл .ipynb ещё раз.",
+        variant: "destructive",
+      });
     };
     reader.readAsText(file);
   };
@@ -339,7 +359,7 @@ export default function Home() {
             <p className="text-muted-foreground">Load a .ipynb file to start experimenting.</p>
           </div>
           <div className="relative">
-            <Input type="file" accept=".ipynb" onChange={handleFileUpload} className="hidden" id="file-upload" />
+            <Input type="file" accept=".ipynb" onChange={handleFileUpload} className="hidden" id="file-upload" data-testid="input-upload-notebook" />
             <Button asChild className="w-full" size="lg">
               <label htmlFor="file-upload" className="cursor-pointer">Select File</label>
             </Button>
@@ -410,6 +430,12 @@ export default function Home() {
                         </div>
                       </div>
                     )}
+
+                    {cell.type === 'raw' && (
+                      <pre className="text-sm font-mono p-4 rounded bg-muted/50 overflow-x-auto whitespace-pre-wrap">
+                        {cell.source.join("")}
+                      </pre>
+                    )}
                   </div>
 
                   {cellResults[cell.id] !== undefined ? (
@@ -429,6 +455,12 @@ export default function Home() {
           );
         })}
       </div>
+
+      <NotebookAssistant
+        key={notebookRevision}
+        notebookContext={notebookContext}
+        colabUrl={colabUrl}
+      />
     </div>
   );
 }

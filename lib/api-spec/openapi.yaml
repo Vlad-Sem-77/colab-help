@@ -97,6 +97,30 @@ paths:
         "502":
           description: Colab server error
 
+  /colab/analyze-notebook:
+    post:
+      operationId: analyzeNotebook
+      tags: [colab]
+      summary: Answer a question about an uploaded notebook
+      description: Sends notebook text to the connected Colab model for analysis without executing notebook cells or adding the prompt to experiment history
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotebookAnalysisInput"
+      responses:
+        "200":
+          description: Notebook analysis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotebookAnalysisResult"
+        "400":
+          description: Bad request
+        "502":
+          description: Colab server error
+
   /history:
     get:
       operationId: listHistory
@@ -227,6 +251,32 @@ components:
         systemPrompt:
           type: ["string", "null"]
         customCode:
+          type: ["string", "null"]
+
+    NotebookAnalysisInput:
+      type: object
+      required: [colabUrl, notebookContext, question]
+      properties:
+        colabUrl:
+          type: string
+          format: uri
+          maxLength: 2048
+        notebookContext:
+          type: string
+          minLength: 1
+          maxLength: 32000
+        question:
+          type: string
+          minLength: 1
+          maxLength: 12000
+
+    NotebookAnalysisResult:
+      type: object
+      required: [answer]
+      properties:
+        answer:
+          type: string
+        model:
           type: ["string", "null"]
 
     ModelCard:
