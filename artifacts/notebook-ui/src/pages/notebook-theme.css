@@ -212,6 +212,23 @@ html[data-notebook-theme="windows95"] .notebook-download-colab button {
   line-height: 1.5;
 }
 
+.notebook-sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.notebook-nav-links {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.notebook-nav-links > a {
+  display: block;
+  text-decoration: none;
+}
+
 .notebook-theme-control {
   display: inline-flex;
   flex: 0 0 auto;
@@ -1008,12 +1025,19 @@ html[data-notebook-theme="windows95"] .notebook-page [data-testid="card-notebook
 
   .notebook-sidebar-nav {
     display: flex;
+    flex-direction: row;
     grid-column: 2;
     grid-row: 1;
     align-items: center;
-    justify-content: flex-end;
-    gap: 4px;
+    justify-content: space-between;
+    gap: 8px;
     padding: 4px 8px !important;
+  }
+
+  .notebook-nav-links {
+    flex-direction: row;
+    align-items: center;
+    gap: 4px;
   }
 
   .notebook-nav-link {
@@ -1088,14 +1112,6 @@ html[data-notebook-theme="windows95"] .notebook-page [data-testid="card-notebook
     margin-bottom: 18px;
   }
 
-  .notebook-theme-control {
-    width: 100%;
-  }
-
-  .notebook-theme-control button {
-    flex: 1;
-  }
-
   .notebook-content {
     gap: 14px;
   }
@@ -1160,6 +1176,61 @@ html[data-notebook-theme="windows95"] .notebook-page [data-testid="card-notebook
   }
 }
 
+@media (max-width: 640px) {
+  .notebook-sidebar {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto;
+  }
+
+  .notebook-brand {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .notebook-sidebar-nav {
+    grid-column: 1;
+    grid-row: 2;
+    min-width: 0;
+    justify-content: space-between;
+    padding: 4px 10px 8px !important;
+  }
+
+  .notebook-theme-control {
+    flex: 0 0 auto;
+    gap: 2px;
+    padding: 3px;
+  }
+
+  .notebook-theme-control button {
+    min-height: 32px;
+    flex: 0 0 auto;
+    gap: 4px;
+    padding: 0 7px;
+    font-size: 11px;
+  }
+
+  .notebook-theme-control button svg {
+    width: 13px;
+    height: 13px;
+  }
+
+  .notebook-nav-links {
+    min-width: 0;
+    gap: 2px;
+  }
+
+  .notebook-nav-link {
+    gap: 4px !important;
+    padding: 6px 7px !important;
+    font-size: 11px;
+  }
+
+  .notebook-nav-link svg {
+    width: 14px;
+    height: 14px;
+  }
+}
+
 @media (max-width: 420px) {
   .notebook-brand h1 {
     font-size: 12px !important;
@@ -1171,25 +1242,12 @@ html[data-notebook-theme="windows95"] .notebook-page [data-testid="card-notebook
     font-size: 11px;
   }
 
-  .notebook-connect-panel {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
   .notebook-download-colab {
     display: none;
   }
 
   .notebook-page {
     padding-inline: 12px;
-  }
-
-  .notebook-page-brand {
-    gap: 10px;
-  }
-
-  .notebook-brand-icon {
-    width: 40px;
-    height: 40px;
   }
 
   .notebook-cell-header {

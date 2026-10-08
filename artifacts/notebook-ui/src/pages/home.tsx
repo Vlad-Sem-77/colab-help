@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Upload, Play, Download, Code, FileText, Settings2, Loader2, Monitor, Waves, SkipForward, RotateCcw, CheckCircle2 } from "lucide-react";
+import { Upload, Play, Download, Code, FileText, Settings2, Loader2, SkipForward, RotateCcw, CheckCircle2 } from "lucide-react";
 import "./notebook-theme.css";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -39,15 +39,14 @@ import {
   setCellEnabled,
 } from "@/lib/notebook";
 import { NotebookReader } from "@/components/notebook-reader";
+import { useNotebookTheme } from "@/components/layout";
 
-type NotebookTheme = "light-waves" | "windows95";
 type CellRunStatus = "running" | "simulated";
 type BatchRunState =
   | { status: "running"; currentCellId: string; cellNumber: number; position: number; total: number }
   | { status: "simulated"; completed: number; total: number }
   | { status: "empty" };
 
-const THEME_STORAGE_KEY = "notebook-ui-theme";
 const MAX_SIMULATION_DURATION_MS = 2400;
 const MAX_SIMULATION_STEP_MS = 180;
 
@@ -59,53 +58,12 @@ function waitForSimulationStep(totalSteps: number): Promise<void> {
   return new Promise(resolve => window.setTimeout(resolve, delay));
 }
 
-function readSavedTheme(): NotebookTheme {
-  try {
-    return window.localStorage.getItem(THEME_STORAGE_KEY) === "windows95"
-      ? "windows95"
-      : "light-waves";
-  } catch {
-    return "light-waves";
-  }
-}
-
 function getLocalStorage(): Storage | null {
   try {
     return window.localStorage;
   } catch {
     return null;
   }
-}
-
-function ThemePicker({
-  theme,
-  onChange,
-}: {
-  theme: NotebookTheme;
-  onChange: (theme: NotebookTheme) => void;
-}) {
-  return (
-    <div className="notebook-theme-control" role="group" aria-label="Стиль блокнота">
-      <button
-        type="button"
-        aria-pressed={theme === "light-waves"}
-        onClick={() => onChange("light-waves")}
-        data-testid="button-theme-light-waves"
-      >
-        <Waves aria-hidden="true" />
-        <span>Ньювейв</span>
-      </button>
-      <button
-        type="button"
-        aria-pressed={theme === "windows95"}
-        onClick={() => onChange("windows95")}
-        data-testid="button-theme-windows95"
-      >
-        <Monitor aria-hidden="true" />
-        <span>Олдскул</span>
-      </button>
-    </div>
-  );
 }
 
 function CellHeader({
@@ -395,7 +353,7 @@ function ParameterWidget({
 }
 
 export default function Home() {
-  const [theme, setTheme] = useState<NotebookTheme>(readSavedTheme);
+  const { theme } = useNotebookTheme();
   const [notebook, setNotebook] = useState<Notebook | null>(null);
   const [cellValues, setCellValues] = useState<Record<string, Record<string, any>>>({});
   const [cellEnabled, setCellEnabledState] = useState<CellEnabledState>({});
@@ -477,18 +435,6 @@ export default function Home() {
   useEffect(() => {
     setAllowOnlineAi(false);
   }, [notebookRevision]);
-
-  useEffect(() => {
-    document.documentElement.dataset.notebookTheme = theme;
-    try {
-      window.localStorage.setItem(THEME_STORAGE_KEY, theme);
-    } catch {
-      // The theme still works for this visit when browser storage is unavailable.
-    }
-    return () => {
-      delete document.documentElement.dataset.notebookTheme;
-    };
-  }, [theme]);
 
   const notebookContext = useMemo(
     () => notebook ? buildNotebookContext(notebook, cellResults) : "",
@@ -692,17 +638,6 @@ export default function Home() {
   return (
     <div className="notebook-page" data-notebook-theme={theme} data-testid="page-notebook">
       <div className="notebook-page-inner">
-        <header className="notebook-page-header">
-          <div className="notebook-page-brand">
-            <div className="notebook-brand-icon"><FileText aria-hidden="true" /></div>
-            <div>
-              <p className="notebook-eyebrow">COLAB READER</p>
-              <h1>Notebook Reader</h1>
-            </div>
-          </div>
-          <ThemePicker theme={theme} onChange={setTheme} />
-        </header>
-
         {!notebook ? (
           <section className="notebook-upload-card" data-testid="card-notebook-upload">
             <div className="notebook-upload-icon"><Upload aria-hidden="true" /></div>
