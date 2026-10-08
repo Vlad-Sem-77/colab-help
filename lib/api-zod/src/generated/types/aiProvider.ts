@@ -12,4 +12,14 @@ export interface AiProvider {
   name: string;
   /** Whether the provider requires a session key just to list models */
   catalogRequiresKey: boolean;
+  /** Whether this browser session has a verified provider key */
+  hasSessionKey: boolean;
+  /** Whether a documented transcription model and endpoint are configured */
+  voiceInputAvailable: boolean;
+  /** Whether a documented speech model and endpoint are configured */
+  voiceOutputAvailable: boolean;
+  /** @nullable */
+  transcriptionModelId: string | null;
+  /** @nullable */
+  speechModelId: string | null;
 }

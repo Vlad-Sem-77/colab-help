@@ -46,7 +46,7 @@ function isTextModel(record: Record<string, unknown>, id: string): boolean {
   const architecture = asRecord(record.architecture);
   const modalities = record.output_modalities ?? architecture?.output_modalities;
   if (Array.isArray(modalities) && !modalities.some((item) => item === "text")) return false;
-  return !/(?:^|[\/._-])(embedding|embed|dall-e|whisper|moderation|tts|speech|transcription|sora|video|image)(?:$|[\/._-])/i.test(id);
+  return !/(?:^|[\/._-])(embedding|embed|dall-e|whisper|moderation|audio|realtime|real-time|tts|speech|transcription|sora|video|image)(?:$|[\/._-])/i.test(id);
 }
 
 function normalizeModel(providerId: AiCatalogProviderId, value: unknown): AiCatalogModel | null {

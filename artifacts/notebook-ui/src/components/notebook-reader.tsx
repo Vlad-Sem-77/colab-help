@@ -25,7 +25,6 @@ interface NotebookReaderProps {
   providerId: AiProviderId;
   modelId: string;
   profile: AiProfile;
-  providerApiKey: string;
   aiReady: boolean;
   allowOnlineAi: boolean;
   onAllowOnlineAiChange: (allow: boolean) => void;
@@ -65,7 +64,6 @@ export function NotebookReader({
   providerId,
   modelId,
   profile,
-  providerApiKey,
   aiReady,
   allowOnlineAi,
   onAllowOnlineAiChange,
@@ -73,11 +71,7 @@ export function NotebookReader({
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isPending, setIsPending] = useState(false);
-  const analyzeWithAi = useAnalyzeNotebookWithAi({
-    request: providerApiKey
-      ? { headers: { "x-ai-provider-key": providerApiKey } }
-      : undefined,
-  });
+  const analyzeWithAi = useAnalyzeNotebookWithAi();
   const analysis = useMemo(() => analyzeNotebook(notebook), [notebook]);
   const sectionCellIndexes = useMemo(() => {
     const indexes: number[] = [];
@@ -257,7 +251,7 @@ export function NotebookReader({
             </div>
             <p className="mt-2 pl-6 text-xs leading-5 text-muted-foreground">
               {aiReady
-                ? "При включении вопрос, код, текст и сохранённые результаты ячеек отправляются выбранному провайдеру. Условия хранения зависят от него. Код не запускается."
+                ? "При включении вопрос и содержимое ноутбука отправляются выбранному провайдеру. Если нажать микрофон, запись вопроса также будет отправлена ему на распознавание; озвучивание ответа отдельно отправляет текст ответа выбранной голосовой модели. Приложение не сохраняет аудиофайлы. Код не запускается."
                 : "Сначала введите API-ключ для текущего сеанса и выберите модель. До этого ответы строятся локально."}
             </p>
           </div>

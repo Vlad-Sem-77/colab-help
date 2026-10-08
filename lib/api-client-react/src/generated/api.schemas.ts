@@ -115,6 +115,16 @@ export interface AiProvider {
   name: string;
   /** Whether the provider requires a session key just to list models */
   catalogRequiresKey: boolean;
+  /** Whether this browser session has a verified provider key */
+  hasSessionKey: boolean;
+  /** Whether a documented transcription model and endpoint are configured */
+  voiceInputAvailable: boolean;
+  /** Whether a documented speech model and endpoint are configured */
+  voiceOutputAvailable: boolean;
+  /** @nullable */
+  transcriptionModelId: string | null;
+  /** @nullable */
+  speechModelId: string | null;
 }
 
 export interface AiProvidersResult {
@@ -181,6 +191,33 @@ export interface AiNotebookAnalysisResult {
      * @items.minimum 0
      */
   sources: number[];
+}
+
+export interface AiCredentialConnectInput {
+  providerId: AiProviderId;
+  /**
+     * @minLength 1
+     * @maxLength 4096
+     */
+  apiKey: string;
+}
+
+export interface AiCredentialConnectResult {
+  providerId: AiProviderId;
+  connected: boolean;
+}
+
+export interface AiVoiceTranscriptionResult {
+  text: string;
+}
+
+export interface AiVoiceSpeechInput {
+  providerId: AiProviderId;
+  /**
+     * @minLength 1
+     * @maxLength 6000
+     */
+  text: string;
 }
 
 export interface ModelCard {
@@ -259,6 +296,10 @@ export interface HistoryEntry {
 }
 
 export type ListAiModelsParams = {
+providerId: AiProviderId;
+};
+
+export type TranscribeAiVoiceParams = {
 providerId: AiProviderId;
 };
 

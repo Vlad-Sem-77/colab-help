@@ -7,13 +7,15 @@ import { Card } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
 import type { AiProfile, AiProviderId } from "@/lib/ai-settings";
+import { SpeechPlaybackButton, VoiceRecordButton } from "@/components/ai-voice-controls";
 
 type NotebookAssistantProps = {
   notebookContext: string;
   providerId: AiProviderId;
   modelId: string;
   profile: AiProfile;
-  providerApiKey: string;
+  voiceInputAvailable: boolean;
+  voiceOutputAvailable: boolean;
   aiReady: boolean;
   allowOnlineAi: boolean;
 };
@@ -67,7 +69,8 @@ export function NotebookAssistant({
   providerId,
   modelId,
   profile,
-  providerApiKey,
+  voiceInputAvailable,
+  voiceOutputAvailable,
   aiReady,
   allowOnlineAi,
 }: NotebookAssistantProps) {
@@ -78,11 +81,7 @@ export function NotebookAssistant({
   const nextMessageId = useRef(0);
   const form = useForm<{ question: string }>({ defaultValues: { question: "" } });
   const question = form.watch("question") ?? "";
-  const analyzeWithAi = useAnalyzeNotebookWithAi({
-    request: providerApiKey
-      ? { headers: { "x-ai-provider-key": providerApiKey } }
-      : undefined,
-  });
+  const analyzeWithAi = useAnalyzeNotebookWithAi();
   const canAsk = aiReady && allowOnlineAi && Boolean(modelId) && Boolean(notebookContext.trim()) && !isPending;
 
   const addMessage = (message: Omit<Message, "id">) => {
@@ -196,7 +195,7 @@ export function NotebookAssistant({
           >
             <CircleHelp className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" aria-hidden="true" />
             <p>
-              Для онлайн-ответа выберите модель и добавьте API-ключ выбранного провайдера в Secrets проекта.
+              Для онлайн-ответа выберите модель и подключите личный API-ключ в настройках провайдера выше.
             </p>
           </div>
         )}
@@ -217,7 +216,8 @@ export function NotebookAssistant({
         >
           <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-[#597967]" aria-hidden="true" />
           <p>
-            При отправке вопроса текст ноутбука передаётся выбранному AI-провайдеру. Провайдер может хранить запросы по своим правилам.
+            При онлайн-вопросе текст ноутбука передаётся выбранному AI-провайдеру. Голосовая запись отправляется на распознавание только после нажатия микрофона; ответ озвучивается по отдельной кнопке.
+            Провайдер может хранить запросы по своим правилам.
             Кодовые ячейки не запускаются. Не отправляйте секретные данные.
           </p>
         </div>
@@ -267,6 +267,9 @@ export function NotebookAssistant({
                     <p className="mt-2 border-t border-slate-100 pt-2 text-[11px] text-slate-400" data-testid={`text-message-model-${message.id}`}>
                       Модель: {message.model}
                     </p>
+                  )}
+                  {message.role === "assistant" && allowOnlineAi && aiReady && voiceOutputAvailable && (
+                    <SpeechPlaybackButton providerId={providerId} text={message.content} />
                   )}
                 </div>
                 {message.role === "user" && (
@@ -352,6 +355,12 @@ export function NotebookAssistant({
                       )}
                     </Button>
                   </div>
+                  <VoiceRecordButton
+                    providerId={providerId}
+                    available={voiceInputAvailable}
+                    disabled={!canAsk || !allowOnlineAi}
+                    onTranscript={(transcript) => form.setValue("question", transcript, { shouldDirty: true })}
+                  />
                 </FormItem>
               )}
             />

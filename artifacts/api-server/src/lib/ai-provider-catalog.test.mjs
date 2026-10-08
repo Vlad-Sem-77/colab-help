@@ -48,6 +48,8 @@ test("retains ProxyAPI and OpenAI catalog IDs while excluding non-chat models", 
     data: [
       { id: "gpt-6.1-sol", owned_by: "openai" },
       { id: "whisper-1", owned_by: "openai" },
+      { id: "gpt-audio-preview", owned_by: "openai" },
+      { id: "gpt-realtime-preview", owned_by: "openai" },
     ],
   });
 

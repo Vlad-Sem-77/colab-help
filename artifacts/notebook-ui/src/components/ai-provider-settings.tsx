@@ -14,8 +14,8 @@ interface AiProviderSettingsProps {
   modelsLoading: boolean;
   catalogError: boolean;
   sessionKeyActive: boolean;
-  onApplyApiKey: (apiKey: string) => void;
-  onClearApiKey: () => void;
+  onApplyApiKey: (apiKey: string) => Promise<void>;
+  onClearApiKey: () => Promise<void>;
   onChange: (settings: AiSettings) => void;
 }
 
@@ -41,6 +41,8 @@ export function AiProviderSettings({
 }: AiProviderSettingsProps) {
   const [filter, setFilter] = useState("");
   const [apiKeyDraft, setApiKeyDraft] = useState("");
+  const [connectionPending, setConnectionPending] = useState(false);
+  const [connectionError, setConnectionError] = useState("");
   const provider = providers.find((item) => item.id === settings.providerId);
   useEffect(() => setApiKeyDraft(""), [settings.providerId]);
   const filteredModels = useMemo(() => {
@@ -55,12 +57,32 @@ export function AiProviderSettings({
   const updateModel = (profile: AiProfile, modelId: string) => {
     updateSettings(profile === "review" ? { reviewModelId: modelId } : { economyModelId: modelId });
   };
-  const applyApiKey = (event: FormEvent<HTMLFormElement>) => {
+  const applyApiKey = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     const apiKey = apiKeyDraft.trim();
     if (!apiKey) return;
-    onApplyApiKey(apiKey);
     setApiKeyDraft("");
+    setConnectionError("");
+    setConnectionPending(true);
+    try {
+      await onApplyApiKey(apiKey);
+    } catch (error) {
+      setConnectionError(error instanceof Error ? error.message : "Не удалось проверить ключ.");
+    } finally {
+      setConnectionPending(false);
+    }
+  };
+
+  const clearApiKey = async () => {
+    setConnectionError("");
+    setConnectionPending(true);
+    try {
+      await onClearApiKey();
+    } catch (error) {
+      setConnectionError(error instanceof Error ? error.message : "Не удалось удалить ключ.");
+    } finally {
+      setConnectionPending(false);
+    }
   };
 
   const renderModelSelect = (profile: AiProfile, value: string, label: string) => (
@@ -152,25 +174,33 @@ export function AiProviderSettings({
           data-testid="input-ai-provider-key"
         />
         <div className="mt-2 flex flex-wrap gap-2">
-          <Button type="submit" size="sm" disabled={!apiKeyDraft.trim()} data-testid="button-use-ai-provider-key">
-            {sessionKeyActive ? "Заменить ключ" : "Использовать в этом сеансе"}
+          <Button type="submit" size="sm" disabled={!apiKeyDraft.trim() || connectionPending} data-testid="button-use-ai-provider-key">
+            {connectionPending ? "Проверяю ключ…" : sessionKeyActive ? "Заменить ключ" : "Подключить ключ"}
           </Button>
           {sessionKeyActive && (
-            <Button type="button" variant="outline" size="sm" onClick={onClearApiKey} data-testid="button-clear-ai-provider-key">
+            <Button type="button" variant="outline" size="sm" onClick={() => void clearApiKey()} disabled={connectionPending} data-testid="button-clear-ai-provider-key">
               Удалить ключ из сеанса
             </Button>
           )}
         </div>
+        {connectionError && <p className="mt-2 text-xs text-destructive" role="alert" data-testid="text-ai-key-error">{connectionError}</p>}
         {sessionKeyActive ? (
           <p className="mt-2 text-xs leading-5 text-muted-foreground" role="status" data-testid="text-ai-session-key-active">
-            Ключ активен для этой вкладки и хранится только в её памяти. После обновления или закрытия страницы его нужно ввести снова.
+            Ключ проверен и хранится только в памяти сервера для этого браузерного сеанса — до 12 часов. Он не попадает в браузерное хранилище или базу данных; после перезапуска сервера сеанс сбрасывается.
           </p>
         ) : (
           <p className="mt-2 text-xs leading-5 text-muted-foreground">
-            Ключ не записывается в хранилище браузера, настройки приложения, базу или журналы. Он передаётся серверу только для запроса к выбранному провайдеру.
+            Ключ отправляется серверу только для проверки доступа к моделям. После проверки он хранится в памяти сервера до 12 часов и не записывается в браузер, базу данных или журналы.
           </p>
         )}
       </form>
+      {provider && (provider.voiceInputAvailable || provider.voiceOutputAvailable) && (
+        <p className="mt-3 text-xs leading-5 text-muted-foreground" data-testid="text-ai-voice-models">
+          Голосовой ввод: {provider.voiceInputAvailable ? provider.transcriptionModelId : "не настроен"} ·
+          озвучивание: {provider.voiceOutputAvailable ? provider.speechModelId : "не настроено"}.
+          Доступность конкретной модели зависит от ключа и проверяется при первом запросе.
+        </p>
+      )}
       <div className="mt-3 space-y-1 text-xs leading-5 text-muted-foreground" aria-live="polite">
         {provider?.catalogRequiresKey && !sessionKeyActive && (
           <p data-testid="text-ai-provider-key-missing">

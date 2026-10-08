@@ -128,7 +128,10 @@ paths:
       operationId: listAiProviders
       tags: [ai]
       summary: List supported AI providers
-      description: Returns supported providers and whether their model catalogs require a session key
+      description: Returns provider model-catalog requirements, current browser-session connection status, and documented voice capabilities without exposing credentials
+      security:
+        - {}
+        - AiSessionCookie: []
       responses:
         "200":
           description: Supported providers
@@ -150,7 +153,8 @@ paths:
             $ref: "#/components/schemas/AiProviderId"
       security:
         - {}
-        - AiProviderSessionKey: []
+        - {}
+        - AiSessionCookie: []
       responses:
         "200":
           description: Provider models
@@ -170,9 +174,9 @@ paths:
       operationId: analyzeNotebookWithAi
       tags: [ai]
       summary: Analyze notebook content with a selected provider model
-      description: Uses a temporary session key to send notebook text to the selected AI provider; notebook cells are not executed
+      description: Uses the server-side browser session credential to send notebook text to the selected AI provider; notebook cells are not executed
       security:
-        - AiProviderSessionKey: []
+        - AiSessionCookie: []
       requestBody:
         required: true
         content:
@@ -192,6 +196,138 @@ paths:
           description: Session key is missing or model is unavailable
         "502":
           description: Provider request failed
+
+  /ai/credentials/connect:
+    post:
+      operationId: connectAiCredential
+      tags: [ai]
+      summary: Verify and connect a provider key for this browser session
+      description: Verifies the key against the provider model catalog and stores it only in server memory for up to 12 hours
+      security:
+        - {}
+        - AiSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiCredentialConnectInput"
+      responses:
+        "200":
+          description: The provider key was verified and connected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiCredentialConnectResult"
+        "400":
+          description: Invalid request
+        "502":
+          description: Provider rejected the key or its catalog is unavailable
+
+  /ai/credentials/{providerId}:
+    delete:
+      operationId: disconnectAiCredential
+      tags: [ai]
+      summary: Remove a provider key from this browser session
+      security:
+        - AiSessionCookie: []
+      parameters:
+        - name: providerId
+          in: path
+          required: true
+          schema:
+            $ref: "#/components/schemas/AiProviderId"
+      responses:
+        "204":
+          description: Provider key removed from the session
+        "400":
+          description: Unsupported provider
+
+  /ai/voice/transcribe:
+    post:
+      operationId: transcribeAiVoice
+      tags: [ai]
+      summary: Transcribe a short voice question
+      description: Sends one in-memory audio recording to the selected provider using the configured transcription model
+      security:
+        - AiSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          audio/webm:
+            schema:
+              type: string
+              format: binary
+          audio/mp4:
+            schema:
+              type: string
+              format: binary
+          audio/ogg:
+            schema:
+              type: string
+              format: binary
+          audio/wav:
+            schema:
+              type: string
+              format: binary
+          audio/mpeg:
+            schema:
+              type: string
+              format: binary
+      parameters:
+        - name: providerId
+          in: query
+          required: true
+          schema:
+            $ref: "#/components/schemas/AiProviderId"
+      responses:
+        "200":
+          description: Transcribed voice question
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiVoiceTranscriptionResult"
+        "400":
+          description: Unsupported or empty audio
+        "409":
+          description: Provider key is not connected
+        "413":
+          description: Audio recording exceeds the size limit
+        "502":
+          description: Provider transcription failed
+
+  /ai/voice/speech:
+    post:
+      operationId: synthesizeAiSpeech
+      tags: [ai]
+      summary: Speak an AI answer
+      description: Converts answer text to audio with the selected provider's configured speech model
+      security:
+        - AiSessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiVoiceSpeechInput"
+      responses:
+        "200":
+          description: Generated speech audio
+          content:
+            audio/mpeg:
+              schema:
+                type: string
+                format: binary
+            audio/wav:
+              schema:
+                type: string
+                format: binary
+        "400":
+          description: Invalid request
+        "409":
+          description: Provider key is not connected
+        "502":
+          description: Provider speech synthesis failed
 
   /history:
     get:
@@ -236,11 +372,11 @@ paths:
 
 components:
   securitySchemes:
-    AiProviderSessionKey:
+    AiSessionCookie:
       type: apiKey
-      in: header
-      name: x-ai-provider-key
-      description: Temporary provider key held only in memory for the active app session
+      in: cookie
+      name: notebook.sid
+      description: HttpOnly cookie identifying the server-side provider-key session
   schemas:
     HealthStatus:
       type: object
@@ -369,7 +505,7 @@ components:
 
     AiProvider:
       type: object
-      required: [id, name, catalogRequiresKey]
+      required: [id, name, catalogRequiresKey, hasSessionKey, voiceInputAvailable, voiceOutputAvailable, transcriptionModelId, speechModelId]
       properties:
         id:
           $ref: "#/components/schemas/AiProviderId"
@@ -378,6 +514,19 @@ components:
         catalogRequiresKey:
           type: boolean
           description: Whether the provider requires a session key just to list models
+        hasSessionKey:
+          type: boolean
+          description: Whether this browser session has a verified provider key
+        voiceInputAvailable:
+          type: boolean
+          description: Whether a documented transcription model and endpoint are configured
+        voiceOutputAvailable:
+          type: boolean
+          description: Whether a documented speech model and endpoint are configured
+        transcriptionModelId:
+          type: ["string", "null"]
+        speechModelId:
+          type: ["string", "null"]
 
     AiProvidersResult:
       type: object
@@ -460,6 +609,45 @@ components:
           items:
             type: integer
             minimum: 0
+
+    AiCredentialConnectInput:
+      type: object
+      required: [providerId, apiKey]
+      properties:
+        providerId:
+          $ref: "#/components/schemas/AiProviderId"
+        apiKey:
+          type: string
+          minLength: 1
+          maxLength: 4096
+          writeOnly: true
+
+    AiCredentialConnectResult:
+      type: object
+      required: [providerId, connected]
+      properties:
+        providerId:
+          $ref: "#/components/schemas/AiProviderId"
+        connected:
+          type: boolean
+
+    AiVoiceTranscriptionResult:
+      type: object
+      required: [text]
+      properties:
+        text:
+          type: string
+
+    AiVoiceSpeechInput:
+      type: object
+      required: [providerId, text]
+      properties:
+        providerId:
+          $ref: "#/components/schemas/AiProviderId"
+        text:
+          type: string
+          minLength: 1
+          maxLength: 6000
 
     ModelCard:
       type: object

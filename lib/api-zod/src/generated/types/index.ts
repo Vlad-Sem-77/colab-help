@@ -6,6 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './aiCredentialConnectInput';
+export * from './aiCredentialConnectResult';
 export * from './aiModel';
 export * from './aiModelsResult';
 export * from './aiNotebookAnalysisInput';
@@ -14,6 +16,8 @@ export * from './aiNotebookAnalysisResult';
 export * from './aiProvider';
 export * from './aiProviderId';
 export * from './aiProvidersResult';
+export * from './aiVoiceSpeechInput';
+export * from './aiVoiceTranscriptionResult';
 export * from './colabPingResult';
 export * from './colabUrlInput';
 export * from './comparisonItem';
@@ -32,3 +36,4 @@ export * from './listAiModelsParams';
 export * from './modelCard';
 export * from './notebookAnalysisInput';
 export * from './notebookAnalysisResult';
+export * from './transcribeAiVoiceParams';

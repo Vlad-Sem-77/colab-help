@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Upload, Play, Download, Code, FileText, Settings2, Loader2, Monitor, Waves, SkipForward, RotateCcw, CheckCircle2 } from "lucide-react";
 import "./notebook-theme.css";
 import { Button } from "@/components/ui/button";
@@ -12,9 +13,8 @@ import { useToast } from "@/hooks/use-toast";
 import { buildNotebookContext } from "@/lib/notebook-context";
 import { NotebookAssistant } from "@/components/notebook-assistant";
 import { AiProviderSettings } from "@/components/ai-provider-settings";
-import { useListAiModels, useListAiProviders } from "@workspace/api-client-react";
+import { getListAiProvidersQueryKey, useListAiModels, useListAiProviders } from "@workspace/api-client-react";
 import type { AiSettings } from "@/lib/ai-settings";
-import { useSessionAiKey } from "@/lib/session-ai-key";
 import {
   getActiveAiModelId,
   readSavedAiSettings,
@@ -409,17 +409,13 @@ export default function Home() {
   const [notebookRevision, setNotebookRevision] = useState(0);
   const [aiSettings, setAiSettings] = useState<AiSettings>(readSavedAiSettings);
   const [allowOnlineAi, setAllowOnlineAi] = useState(false);
-  const [sessionKeyRevision, setSessionKeyRevision] = useState(0);
-  const { credential: sessionCredential, setCredential: setSessionCredential } = useSessionAiKey();
-  const sessionApiKey = sessionCredential?.providerId === aiSettings.providerId
-    ? sessionCredential.apiKey
-    : "";
+  const queryClient = useQueryClient();
   const aiProvidersQuery = useListAiProviders({ query: { staleTime: 60_000 } });
   const selectedAiProvider = aiProvidersQuery.data?.providers.find(
     (provider) => provider.id === aiSettings.providerId,
   );
   const canLoadModelCatalog = Boolean(
-    selectedAiProvider && (!selectedAiProvider.catalogRequiresKey || sessionApiKey),
+    selectedAiProvider && (!selectedAiProvider.catalogRequiresKey || selectedAiProvider.hasSessionKey),
   );
   const aiModelsQuery = useListAiModels(
     { providerId: aiSettings.providerId },
@@ -427,34 +423,50 @@ export default function Home() {
       query: {
         staleTime: 120_000,
         enabled: canLoadModelCatalog,
-        queryKey: ["listAiModels", aiSettings.providerId, sessionKeyRevision],
+        queryKey: ["listAiModels", aiSettings.providerId, selectedAiProvider?.hasSessionKey ?? false],
       },
-      request: selectedAiProvider?.catalogRequiresKey && sessionApiKey
-        ? { headers: { "x-ai-provider-key": sessionApiKey } }
-        : undefined,
     },
   );
   const activeAiModelId = getActiveAiModelId(aiSettings);
   const aiModelIsAvailable = aiModelsQuery.data?.models.some((model) => model.id === activeAiModelId) ?? false;
-  const aiReady = Boolean(sessionApiKey && selectedAiProvider && activeAiModelId && aiModelIsAvailable);
+  const aiReady = Boolean(selectedAiProvider?.hasSessionKey && activeAiModelId && aiModelIsAvailable);
 
   const { toast } = useToast();
   const handleAiSettingsChange = (nextSettings: AiSettings) => {
     if (nextSettings.providerId !== aiSettings.providerId) {
-      setSessionCredential(null);
-      setSessionKeyRevision((revision) => revision + 1);
       setAllowOnlineAi(false);
     }
     setAiSettings(nextSettings);
   };
-  const applySessionApiKey = (apiKey: string) => {
-    setSessionCredential({ providerId: aiSettings.providerId, apiKey });
-    setSessionKeyRevision((revision) => revision + 1);
+
+  const connectProviderKey = async (apiKey: string) => {
+    const providerId = aiSettings.providerId;
+    const response = await fetch("/api/ai/credentials/connect", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ providerId, apiKey }),
+    });
+    const result = await response.json().catch(() => null) as { error?: string } | null;
+    if (!response.ok) throw new Error(result?.error ?? `Не удалось подключить ключ (HTTP ${response.status}).`);
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: getListAiProvidersQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: ["listAiModels", providerId] }),
+    ]);
     setAllowOnlineAi(false);
   };
-  const clearSessionApiKey = () => {
-    setSessionCredential(null);
-    setSessionKeyRevision((revision) => revision + 1);
+
+  const disconnectProviderKey = async () => {
+    const providerId = aiSettings.providerId;
+    const response = await fetch(`/api/ai/credentials/${encodeURIComponent(providerId)}`, {
+      method: "DELETE",
+      credentials: "same-origin",
+    });
+    if (!response.ok) throw new Error(`Не удалось удалить ключ (HTTP ${response.status}).`);
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: getListAiProvidersQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: ["listAiModels", providerId] }),
+    ]);
     setAllowOnlineAi(false);
   };
 
@@ -807,9 +819,9 @@ export default function Home() {
               providersLoading={aiProvidersQuery.isLoading}
               modelsLoading={aiModelsQuery.isLoading}
               catalogError={aiModelsQuery.isError}
-              sessionKeyActive={Boolean(sessionApiKey)}
-              onApplyApiKey={applySessionApiKey}
-              onClearApiKey={clearSessionApiKey}
+              sessionKeyActive={Boolean(selectedAiProvider?.hasSessionKey)}
+              onApplyApiKey={connectProviderKey}
+              onClearApiKey={disconnectProviderKey}
               onChange={handleAiSettingsChange}
             />
             <NotebookReader
@@ -819,7 +831,6 @@ export default function Home() {
               providerId={aiSettings.providerId}
               modelId={activeAiModelId}
               profile={aiSettings.profile}
-              providerApiKey={sessionApiKey}
               aiReady={aiReady}
               allowOnlineAi={allowOnlineAi}
               onAllowOnlineAiChange={setAllowOnlineAi}
@@ -935,7 +946,8 @@ export default function Home() {
               providerId={aiSettings.providerId}
               modelId={activeAiModelId}
               profile={aiSettings.profile}
-              providerApiKey={sessionApiKey}
+              voiceInputAvailable={Boolean(selectedAiProvider?.voiceInputAvailable)}
+              voiceOutputAvailable={Boolean(selectedAiProvider?.voiceOutputAvailable)}
               aiReady={aiReady}
               allowOnlineAi={allowOnlineAi}
             />

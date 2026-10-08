@@ -15,15 +15,23 @@ function notebookFile(name: string, content: string) {
 
 test.beforeEach(async ({ page }) => {
   await page.route("**/api/ai/providers", async route => {
+    const hasSessionKey = route.request().headers().cookie?.includes("notebook.sid=mock-session") ?? false;
     await route.fulfill({
       json: {
         providers: [
-          { id: "aitunnel", name: "AI Tunnel", catalogRequiresKey: false },
-          { id: "proxyapi", name: "ProxyAPI", catalogRequiresKey: true },
-          { id: "routerai", name: "RouterAI", catalogRequiresKey: false },
-          { id: "openai", name: "OpenAI", catalogRequiresKey: true },
+          { id: "aitunnel", name: "AI Tunnel", catalogRequiresKey: false, hasSessionKey, voiceInputAvailable: true, voiceOutputAvailable: true, transcriptionModelId: "whisper-1", speechModelId: "gpt-4o-mini-tts" },
+          { id: "proxyapi", name: "ProxyAPI", catalogRequiresKey: true, hasSessionKey: false, voiceInputAvailable: true, voiceOutputAvailable: true, transcriptionModelId: "openai/gpt-4o-mini-transcribe", speechModelId: "openai/gpt-4o-mini-tts" },
+          { id: "routerai", name: "RouterAI", catalogRequiresKey: false, hasSessionKey: false, voiceInputAvailable: true, voiceOutputAvailable: true, transcriptionModelId: "x-ai/grok-stt-1.0", speechModelId: "qwen/qwen-audio-3.0-tts-plus" },
+          { id: "openai", name: "OpenAI", catalogRequiresKey: true, hasSessionKey: false, voiceInputAvailable: true, voiceOutputAvailable: true, transcriptionModelId: "gpt-4o-mini-transcribe", speechModelId: "gpt-4o-mini-tts" },
         ],
       },
+    });
+  });
+  await page.route("**/api/ai/credentials/connect", async route => {
+    await route.fulfill({
+      status: 200,
+      headers: { "Set-Cookie": "notebook.sid=mock-session; Path=/api; HttpOnly; SameSite=Strict" },
+      json: { providerId: "aitunnel", connected: true },
     });
   });
   await page.route("**/api/ai/models**", async route => {
@@ -110,11 +118,71 @@ test("uploads notebook text, parameters and saved results with the notebook help
     .toContainText("Этот текст описывает подготовку данных.");
 });
 
-test("uses exact catalog models and keeps the provider key only for the current session", async ({ page }) => {
+test("keeps the provider key in the server browser session and supports voice questions and spoken answers", async ({ page }) => {
   const testSessionKey = "test-only-session-key";
-  let sentApiKey = "";
+  let keyWasSentOnConnect = false;
+  let keyAppearedOutsideConnect = false;
+  let analyzeSentKeyHeader = false;
+  let analyzeCookie = "";
+  let connectResponseIncludedKey = false;
+  let transcribedAudioType = "";
+
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: {
+        getUserMedia: async () => ({ getTracks: () => [{ stop: () => undefined }] }),
+      },
+    });
+    class FakeMediaRecorder {
+      static isTypeSupported() { return true; }
+      state = "inactive";
+      mimeType = "audio/webm";
+      ondataavailable: ((event: { data: Blob }) => void) | null = null;
+      onstop: (() => void) | null = null;
+      constructor(_stream: MediaStream, options?: MediaRecorderOptions) {
+        this.mimeType = options?.mimeType ?? this.mimeType;
+      }
+      start() { this.state = "recording"; }
+      stop() {
+        this.state = "inactive";
+        this.ondataavailable?.({ data: new Blob(["mock voice"], { type: this.mimeType }) });
+        this.onstop?.();
+      }
+    }
+    Object.defineProperty(window, "MediaRecorder", { configurable: true, value: FakeMediaRecorder });
+  });
+  await page.reload();
+  page.on("request", (request) => {
+    if (!request.url().includes("/credentials/connect") && request.postData()?.includes(testSessionKey)) {
+      keyAppearedOutsideConnect = true;
+    }
+  });
+  await page.route("**/api/ai/credentials/connect", async (route) => {
+    const body = route.request().postDataJSON() as { providerId?: string; apiKey?: string };
+    keyWasSentOnConnect = body.providerId === "aitunnel" && body.apiKey === testSessionKey;
+    const responseBody = { providerId: "aitunnel", connected: true };
+    connectResponseIncludedKey = JSON.stringify(responseBody).includes(testSessionKey);
+    await route.fulfill({
+      status: 200,
+      headers: { "Set-Cookie": "notebook.sid=mock-session; Path=/api; HttpOnly; SameSite=Strict" },
+      json: responseBody,
+    });
+  });
+  await page.route("**/api/ai/voice/transcribe**", async (route) => {
+    transcribedAudioType = route.request().headers()["content-type"] ?? "";
+    await route.fulfill({ json: { text: "Что делает этот ноутбук?" } });
+  });
+  await page.route("**/api/ai/voice/speech", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "audio/mpeg",
+      body: Buffer.from("mock-mp3-audio"),
+    });
+  });
   await page.route("**/api/ai/analyze-notebook", async route => {
-    sentApiKey = route.request().headers()["x-ai-provider-key"] ?? "";
+    analyzeSentKeyHeader = Boolean(route.request().headers()["x-ai-provider-key"]);
+    analyzeCookie = route.request().headers().cookie ?? "";
     const request = route.request().postDataJSON() as { providerId: string; modelId: string };
     await route.fulfill({
       json: {
@@ -130,6 +198,7 @@ test("uses exact catalog models and keeps the provider key only for the current 
   await page.getByTestId("input-ai-provider-key").fill(testSessionKey);
   await page.getByTestId("button-use-ai-provider-key").click();
   await expect(page.getByTestId("text-ai-session-key-active")).toBeVisible();
+  expect(keyWasSentOnConnect).toBe(true);
 
   await page.getByTestId("select-ai-model-review").click();
   await page.getByRole("option", { name: /openai\/gpt-6\.1-sol/ }).click();
@@ -145,6 +214,7 @@ test("uses exact catalog models and keeps the provider key only for the current 
     reviewModelId: "openai/gpt-6.1-sol",
     economyModelId: "qwen/qwen3.8-flash",
   });
+  expect(connectResponseIncludedKey).toBe(false);
   const browserStorage = await page.evaluate(() => JSON.stringify({
     local: Object.fromEntries(Object.entries(localStorage)),
     session: Object.fromEntries(Object.entries(sessionStorage)),
@@ -152,17 +222,25 @@ test("uses exact catalog models and keeps the provider key only for the current 
   expect(browserStorage).not.toContain(testSessionKey);
 
   await page.getByTestId("checkbox-notebook-ai-consent").click();
-  await page.getByTestId("input-assistant-question").fill("Объясни, что делает код");
+  await page.getByTestId("button-record-assistant-question").click();
+  await expect(page.getByTestId("button-record-assistant-question")).toContainText("Остановить запись");
+  await page.getByTestId("button-record-assistant-question").click();
+  await expect(page.getByTestId("input-assistant-question")).toHaveValue("Что делает этот ноутбук?");
+  expect(transcribedAudioType).toBe("audio/webm");
   await page.getByTestId("button-submit-assistant-question").click();
   await expect(page.getByTestId("text-message-content-1"))
     .toContainText("Ответ ИИ по модели qwen/qwen3.8-flash");
-  expect(sentApiKey).toBe(testSessionKey);
+  expect(analyzeSentKeyHeader).toBe(false);
+  expect(analyzeCookie).toContain("notebook.sid=mock-session");
+  expect(keyAppearedOutsideConnect).toBe(false);
+  await page.getByTestId("button-speak-assistant-answer").click();
+  await expect(page.getByTestId("audio-assistant-answer")).toBeVisible();
 
   await page.reload();
   await page.getByTestId("input-upload-notebook").setInputFiles(notebookFixture);
-  await expect(page.getByTestId("text-ai-session-key-active")).toHaveCount(0);
+  await expect(page.getByTestId("text-ai-session-key-active")).toBeVisible();
   await expect(page.getByTestId("input-ai-provider-key")).toHaveValue("");
-  await expect(page.getByTestId("checkbox-notebook-ai-consent")).toBeDisabled();
+  await expect(page.getByTestId("checkbox-notebook-ai-consent")).toBeEnabled();
 });
 
 test("clears the previous notebook state after a successful replacement", async ({ page }) => {

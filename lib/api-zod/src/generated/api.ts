@@ -135,14 +135,19 @@ export const AnalyzeNotebookResponse = zod.object({
 
 
 /**
- * Returns supported providers and whether their model catalogs require a session key
+ * Returns provider model-catalog requirements, current browser-session connection status, and documented voice capabilities without exposing credentials
  * @summary List supported AI providers
  */
 export const ListAiProvidersResponse = zod.object({
   "providers": zod.array(zod.object({
   "id": zod.enum(['aitunnel', 'proxyapi', 'routerai', 'openai']),
   "name": zod.string(),
-  "catalogRequiresKey": zod.boolean().describe('Whether the provider requires a session key just to list models')
+  "catalogRequiresKey": zod.boolean().describe('Whether the provider requires a session key just to list models'),
+  "hasSessionKey": zod.boolean().describe('Whether this browser session has a verified provider key'),
+  "voiceInputAvailable": zod.boolean().describe('Whether a documented transcription model and endpoint are configured'),
+  "voiceOutputAvailable": zod.boolean().describe('Whether a documented speech model and endpoint are configured'),
+  "transcriptionModelId": zod.string().nullable(),
+  "speechModelId": zod.string().nullable()
 }))
 })
 
@@ -171,7 +176,7 @@ export const ListAiModelsResponse = zod.object({
 
 
 /**
- * Uses a temporary session key to send notebook text to the selected AI provider; notebook cells are not executed
+ * Uses the server-side browser session credential to send notebook text to the selected AI provider; notebook cells are not executed
  * @summary Analyze notebook content with a selected provider model
  */
 export const analyzeNotebookWithAiBodyModelIdMax = 200;
@@ -200,6 +205,64 @@ export const AnalyzeNotebookWithAiResponse = zod.object({
   "modelId": zod.string(),
   "sources": zod.array(zod.number().int().min(analyzeNotebookWithAiResponseSourcesItemMin)).describe('Zero-based cell indexes cited by the model and present in the supplied notebook context')
 })
+
+
+/**
+ * Verifies the key against the provider model catalog and stores it only in server memory for up to 12 hours
+ * @summary Verify and connect a provider key for this browser session
+ */
+export const connectAiCredentialBodyApiKeyMax = 4096;
+
+
+
+export const ConnectAiCredentialBody = zod.object({
+  "providerId": zod.enum(['aitunnel', 'proxyapi', 'routerai', 'openai']),
+  "apiKey": zod.string().min(1).max(connectAiCredentialBodyApiKeyMax)
+})
+
+export const ConnectAiCredentialResponse = zod.object({
+  "providerId": zod.enum(['aitunnel', 'proxyapi', 'routerai', 'openai']),
+  "connected": zod.boolean()
+})
+
+
+/**
+ * @summary Remove a provider key from this browser session
+ */
+export const DisconnectAiCredentialParams = zod.object({
+  "providerId": zod.enum(['aitunnel', 'proxyapi', 'routerai', 'openai'])
+})
+
+export const DisconnectAiCredentialResponse = zod.void()
+
+
+/**
+ * Sends one in-memory audio recording to the selected provider using the configured transcription model
+ * @summary Transcribe a short voice question
+ */
+export const TranscribeAiVoiceQueryParams = zod.object({
+  "providerId": zod.enum(['aitunnel', 'proxyapi', 'routerai', 'openai'])
+})
+
+export const TranscribeAiVoiceResponse = zod.object({
+  "text": zod.string()
+})
+
+
+/**
+ * Converts answer text to audio with the selected provider's configured speech model
+ * @summary Speak an AI answer
+ */
+export const synthesizeAiSpeechBodyTextMax = 6000;
+
+
+
+export const SynthesizeAiSpeechBody = zod.object({
+  "providerId": zod.enum(['aitunnel', 'proxyapi', 'routerai', 'openai']),
+  "text": zod.string().min(1).max(synthesizeAiSpeechBodyTextMax)
+})
+
+export const SynthesizeAiSpeechResponse = zod.unknown()
 
 
 /**

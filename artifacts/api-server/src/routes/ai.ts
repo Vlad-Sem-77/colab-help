@@ -1,4 +1,4 @@
-import { Router, type IRouter, type NextFunction, type Request, type Response } from "express";
+import express, { Router, type IRouter, type NextFunction, type Request, type Response } from "express";
 import fetch from "node-fetch";
 import {
   normalizeAiCatalog,
@@ -16,9 +16,17 @@ type ProviderConfig = {
   id: ProviderId;
   name: string;
   modelsUrl: string;
+  credentialCheckUrl: string;
   chatUrl: string;
   catalogNeedsKey: boolean;
   priceCurrency: string | null;
+  voice: {
+    transcriptionUrl: string;
+    transcriptionModelId: string;
+    speechUrl: string;
+    speechModelId: string;
+    speechVoice: string;
+  };
 };
 
 const providers: Record<ProviderId, ProviderConfig> = {
@@ -26,34 +34,71 @@ const providers: Record<ProviderId, ProviderConfig> = {
     id: "aitunnel",
     name: "AI Tunnel",
     modelsUrl: "https://api.aitunnel.ru/public/aitunnel/openrouter-models/chat",
+    credentialCheckUrl: "https://api.aitunnel.ru/v1/models",
     chatUrl: "https://api.aitunnel.ru/v1/chat/completions",
     catalogNeedsKey: false,
     priceCurrency: "RUB",
+    voice: {
+      transcriptionUrl: "https://api.aitunnel.ru/v1/audio/transcriptions",
+      transcriptionModelId: "whisper-1",
+      speechUrl: "https://api.aitunnel.ru/v1/audio/speech",
+      speechModelId: "gpt-4o-mini-tts",
+      speechVoice: "coral",
+    },
   },
   proxyapi: {
     id: "proxyapi",
     name: "ProxyAPI",
     modelsUrl: "https://api.proxyapi.ru/v1/models",
+    credentialCheckUrl: "https://api.proxyapi.ru/v1/models",
     chatUrl: "https://api.proxyapi.ru/v1/chat/completions",
     catalogNeedsKey: true,
     priceCurrency: null,
+    voice: {
+      transcriptionUrl: "https://api.proxyapi.ru/v1/audio/transcriptions",
+      transcriptionModelId: "openai/gpt-4o-mini-transcribe",
+      speechUrl: "https://api.proxyapi.ru/v1/audio/speech",
+      speechModelId: "openai/gpt-4o-mini-tts",
+      speechVoice: "coral",
+    },
   },
   routerai: {
     id: "routerai",
     name: "RouterAI",
     modelsUrl: "https://routerai.ru/api/v1/models",
+    credentialCheckUrl: "https://routerai.ru/api/v1/models",
     chatUrl: "https://routerai.ru/api/v1/chat/completions",
     catalogNeedsKey: false,
     priceCurrency: "RUB",
+    voice: {
+      transcriptionUrl: "https://routerai.ru/api/v1/audio/transcriptions",
+      transcriptionModelId: "x-ai/grok-stt-1.0",
+      speechUrl: "https://routerai.ru/api/v1/audio/speech",
+      speechModelId: "qwen/qwen-audio-3.0-tts-plus",
+      speechVoice: "longanlingxin",
+    },
   },
   openai: {
     id: "openai",
     name: "OpenAI",
     modelsUrl: "https://api.openai.com/v1/models",
+    credentialCheckUrl: "https://api.openai.com/v1/models",
     chatUrl: "https://api.openai.com/v1/chat/completions",
     catalogNeedsKey: true,
     priceCurrency: null,
+    voice: {
+      transcriptionUrl: "https://api.openai.com/v1/audio/transcriptions",
+      transcriptionModelId: "gpt-4o-mini-transcribe",
+      speechUrl: "https://api.openai.com/v1/audio/speech",
+      speechModelId: "gpt-4o-mini-tts",
+      speechVoice: "coral",
+    },
   },
+};
+
+type SessionApiCredential = { apiKey: string; expiresAt: number };
+type AiSession = Request["session"] & {
+  aiProviderKeys?: Partial<Record<ProviderId, SessionApiCredential>>;
 };
 
 const modelCache = new Map<ProviderId, { expiresAt: number; models: ModelInfo[] }>();
@@ -62,18 +107,49 @@ const MODEL_CACHE_MS = 2 * 60 * 1000;
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT_MAX_REQUESTS = 20;
 const MAX_SESSION_API_KEY_LENGTH = 4096;
+const MAX_VOICE_AUDIO_BYTES = 10 * 1024 * 1024;
+const MAX_VOICE_TEXT_LENGTH = 6000;
+const SESSION_CREDENTIAL_TTL_MS = 12 * 60 * 60 * 1000;
 
 function isProviderId(value: unknown): value is ProviderId {
   return typeof value === "string" && Object.hasOwn(providers, value);
 }
 
-function getSessionApiKey(req: Request, res: Response): string | undefined {
-  const apiKey = req.get("x-ai-provider-key")?.trim();
-  if (apiKey && apiKey.length > MAX_SESSION_API_KEY_LENGTH) {
-    res.status(400).json({ error: "The provider key is too long." });
-    return undefined;
+function getSessionCredentials(req: Request): Partial<Record<ProviderId, SessionApiCredential>> {
+  const session = req.session as AiSession;
+  const now = Date.now();
+  const activeEntries = Object.entries(session.aiProviderKeys ?? {}).filter((entry): entry is [ProviderId, SessionApiCredential] => {
+    const [providerId, credential] = entry;
+    return isProviderId(providerId)
+      && Boolean(credential?.apiKey)
+      && credential.expiresAt > now;
+  });
+  const activeCredentials = Object.fromEntries(activeEntries) as Partial<Record<ProviderId, SessionApiCredential>>;
+  if (Object.keys(activeCredentials).length !== Object.keys(session.aiProviderKeys ?? {}).length) {
+    session.aiProviderKeys = activeCredentials;
   }
-  return apiKey || undefined;
+  return activeCredentials;
+}
+
+function getSessionApiKey(req: Request, providerId: ProviderId): string | undefined {
+  return getSessionCredentials(req)[providerId]?.apiKey;
+}
+
+function setNoStore(res: Response): void {
+  res.set("Cache-Control", "no-store");
+  res.set("Vary", "Cookie");
+}
+
+function sendSessionFailure(req: Request, res: Response): void {
+  req.session.destroy(() => {
+    res.clearCookie("notebook.sid", {
+      httpOnly: true,
+      sameSite: "strict",
+      secure: req.secure,
+      path: "/api",
+    });
+    res.status(500).json({ error: "Не удалось безопасно сохранить подключение. Повторите попытку." });
+  });
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -112,17 +188,25 @@ async function loadModels(providerId: ProviderId, apiKey?: string): Promise<Mode
   return models;
 }
 
-router.get("/ai/providers", (_req, res): void => {
+router.get("/ai/providers", (req, res): void => {
+  setNoStore(res);
+  const sessionCredentials = getSessionCredentials(req);
   res.json({
-    providers: Object.values(providers).map(({ id, name }) => ({
+    providers: Object.values(providers).map(({ id, name, voice }) => ({
       id,
       name,
       catalogRequiresKey: providers[id].catalogNeedsKey,
+      hasSessionKey: Boolean(sessionCredentials[id]),
+      voiceInputAvailable: Boolean(voice.transcriptionUrl && voice.transcriptionModelId),
+      voiceOutputAvailable: Boolean(voice.speechUrl && voice.speechModelId),
+      transcriptionModelId: voice.transcriptionModelId,
+      speechModelId: voice.speechModelId,
     })),
   });
 });
 
 router.get("/ai/models", async (req, res): Promise<void> => {
+  setNoStore(res);
   const providerId = req.query.providerId;
   if (!isProviderId(providerId)) {
     res.status(400).json({ error: "Choose one of the supported AI providers." });
@@ -130,10 +214,9 @@ router.get("/ai/models", async (req, res): Promise<void> => {
   }
 
   const provider = providers[providerId];
-  const apiKey = getSessionApiKey(req, res);
-  if (res.headersSent) return;
+  const apiKey = getSessionApiKey(req, providerId);
   if (provider.catalogNeedsKey && !apiKey) {
-    res.status(409).json({ error: `Enter a ${provider.name} API key for this session to load its catalog.` });
+    res.status(409).json({ error: `Подключите ключ ${provider.name} для текущего сеанса, чтобы загрузить каталог.` });
     return;
   }
 
@@ -141,11 +224,111 @@ router.get("/ai/models", async (req, res): Promise<void> => {
     const models = await loadModels(providerId, apiKey);
     res.json({ providerId, models, count: models.length });
   } catch {
-    const message = "Could not load the provider catalog. Check the session key and provider availability.";
+    const message = "Не удалось загрузить каталог. Проверьте подключение ключа и доступность провайдера.";
     const status = 502;
     req.log?.warn({ providerId, status }, "AI provider catalog request failed");
     res.status(status).json({ error: message });
   }
+});
+
+router.post("/ai/credentials/connect", requireSameOrigin, limitAiRequests, async (req, res): Promise<void> => {
+  setNoStore(res);
+  const body = asRecord(req.body);
+  const providerId = body?.providerId;
+  const apiKey = asString(body?.apiKey);
+  if (!isProviderId(providerId) || !apiKey || apiKey.length > MAX_SESSION_API_KEY_LENGTH) {
+    res.status(400).json({ error: "Выберите провайдера и введите корректный API-ключ." });
+    return;
+  }
+
+  const provider = providers[providerId];
+  let models: ModelInfo[];
+  let upstreamStatus: number | undefined;
+  try {
+    const response = await fetch(provider.credentialCheckUrl, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(15000),
+    });
+    upstreamStatus = response.status;
+    if (!response.ok) {
+      req.log?.warn({ providerId, status: response.status }, "AI provider credential verification failed");
+      res.status(502).json({ error: `Не удалось проверить ключ ${provider.name}. Проверьте ключ, доступ к моделям и баланс.` });
+      return;
+    }
+    models = normalizeAiCatalog(providerId, await response.json());
+  } catch {
+    req.log?.warn({ providerId, status: upstreamStatus }, "AI provider credential verification could not reach provider");
+    res.status(502).json({ error: `Не удалось связаться с ${provider.name}. Повторите попытку позже.` });
+    return;
+  }
+
+  if (models.length === 0) {
+    res.status(502).json({ error: `${provider.name} не вернул доступные текстовые модели для этого ключа.` });
+    return;
+  }
+
+  const existingCredentials = getSessionCredentials(req);
+  try {
+    await new Promise<void>((resolve, reject) => {
+      req.session.regenerate((error) => error ? reject(error) : resolve());
+    });
+  } catch {
+    sendSessionFailure(req, res);
+    return;
+  }
+
+  const session = req.session as AiSession;
+  session.aiProviderKeys = {
+    ...existingCredentials,
+    [providerId]: { apiKey, expiresAt: Date.now() + SESSION_CREDENTIAL_TTL_MS },
+  };
+  session.cookie.maxAge = SESSION_CREDENTIAL_TTL_MS;
+  try {
+    await new Promise<void>((resolve, reject) => {
+      req.session.save((error) => error ? reject(error) : resolve());
+    });
+  } catch {
+    sendSessionFailure(req, res);
+    return;
+  }
+
+  res.json({ providerId, connected: true });
+});
+
+router.delete("/ai/credentials/:providerId", requireSameOrigin, (req, res): void => {
+  setNoStore(res);
+  const providerId = req.params.providerId;
+  if (!isProviderId(providerId)) {
+    res.status(400).json({ error: "Выбран неизвестный провайдер." });
+    return;
+  }
+  const session = req.session as AiSession;
+  const credentials = getSessionCredentials(req);
+  delete credentials[providerId];
+  if (Object.keys(credentials).length === 0) {
+    req.session.destroy((error) => {
+      res.clearCookie("notebook.sid", {
+        httpOnly: true,
+        sameSite: "strict",
+        secure: req.secure,
+        path: "/api",
+      });
+      if (error) {
+        res.status(500).json({ error: "Не удалось удалить подключение." });
+        return;
+      }
+      res.status(204).end();
+    });
+    return;
+  }
+  session.aiProviderKeys = credentials;
+  req.session.save((error) => {
+    if (error) {
+      res.status(500).json({ error: "Не удалось удалить подключение." });
+      return;
+    }
+    res.status(204).end();
+  });
 });
 
 function limitAiRequests(req: Request, res: Response, next: NextFunction): void {
@@ -189,6 +372,7 @@ function requireSameOrigin(req: Request, res: Response, next: NextFunction): voi
 }
 
 router.post("/ai/analyze-notebook", requireSameOrigin, limitAiRequests, async (req, res): Promise<void> => {
+  setNoStore(res);
   const body = asRecord(req.body);
   const providerId = body?.providerId;
   const modelId = asString(body?.modelId);
@@ -213,17 +397,16 @@ router.post("/ai/analyze-notebook", requireSameOrigin, limitAiRequests, async (r
   }
 
   const provider = providers[providerId];
-  const apiKey = getSessionApiKey(req, res);
-  if (res.headersSent) return;
+  const apiKey = getSessionApiKey(req, providerId);
   if (!apiKey) {
-    res.status(409).json({ error: `Enter a ${provider.name} API key for this session before asking the AI.` });
+    res.status(409).json({ error: `Сначала подключите ключ ${provider.name} для текущего сеанса.` });
     return;
   }
 
   try {
     const models = await loadModels(providerId, apiKey);
     if (!models.some((model) => model.id === modelId)) {
-      res.status(409).json({ error: "That model is no longer in the provider catalog. Refresh the model list." });
+      res.status(409).json({ error: "Этой модели больше нет в каталоге провайдера. Обновите список моделей." });
       return;
     }
 
@@ -260,7 +443,7 @@ router.post("/ai/analyze-notebook", requireSameOrigin, limitAiRequests, async (r
 
     if (!response.ok) {
       req.log?.warn({ providerId, modelId, status: response.status }, "AI provider request failed");
-      res.status(502).json({ error: `${provider.name} returned HTTP ${response.status}. Check the model, API key, and provider balance.` });
+      res.status(502).json({ error: `${provider.name} отклонил запрос (HTTP ${response.status}). Проверьте модель, ключ и баланс.` });
       return;
     }
 
@@ -279,7 +462,7 @@ router.post("/ai/analyze-notebook", requireSameOrigin, limitAiRequests, async (r
         : "";
 
     if (!answer) {
-      res.status(502).json({ error: `${provider.name} returned an empty answer.` });
+      res.status(502).json({ error: `${provider.name} вернул пустой ответ.` });
       return;
     }
 
@@ -291,7 +474,130 @@ router.post("/ai/analyze-notebook", requireSameOrigin, limitAiRequests, async (r
     });
   } catch {
     req.log?.error({ providerId, modelId }, "Notebook analysis via AI provider failed");
-    res.status(502).json({ error: `Could not get an answer from ${provider.name}. Check the connection and try again.` });
+    res.status(502).json({ error: `Не удалось получить ответ от ${provider.name}. Проверьте подключение и попробуйте ещё раз.` });
+  }
+});
+
+router.post(
+  "/ai/voice/transcribe",
+  requireSameOrigin,
+  limitAiRequests,
+  express.raw({ type: () => true, limit: MAX_VOICE_AUDIO_BYTES }),
+  async (req, res): Promise<void> => {
+    setNoStore(res);
+    const providerId = req.query.providerId;
+    const contentType = req.get("content-type")?.split(";")[0].trim().toLowerCase() ?? "";
+    const supportedAudioTypes = new Set(["audio/webm", "audio/mp4", "audio/ogg", "audio/wav", "audio/mpeg"]);
+    if (!isProviderId(providerId) || !supportedAudioTypes.has(contentType)) {
+      res.status(400).json({ error: "Этот формат аудиозаписи не поддерживается." });
+      return;
+    }
+    if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+      res.status(400).json({ error: "Запись пустая. Попробуйте записать вопрос ещё раз." });
+      return;
+    }
+    if (req.body.length > MAX_VOICE_AUDIO_BYTES) {
+      res.status(413).json({ error: "Голосовая запись слишком большая." });
+      return;
+    }
+
+    const provider = providers[providerId];
+    const apiKey = getSessionApiKey(req, providerId);
+    if (!apiKey) {
+      res.status(409).json({ error: `Сначала подключите ключ ${provider.name} для текущего сеанса.` });
+      return;
+    }
+
+    const extensionByType: Record<string, string> = {
+      "audio/webm": "webm",
+      "audio/mp4": "mp4",
+      "audio/ogg": "ogg",
+      "audio/wav": "wav",
+      "audio/mpeg": "mp3",
+    };
+    const formData = new FormData();
+    formData.set("model", provider.voice.transcriptionModelId);
+    formData.set("language", "ru");
+    const audioBuffer = new ArrayBuffer(req.body.byteLength);
+    new Uint8Array(audioBuffer).set(req.body);
+    formData.set(
+      "file",
+      new File([audioBuffer], `voice-question.${extensionByType[contentType]}`, { type: contentType }),
+    );
+
+    try {
+      const response = await globalThis.fetch(provider.voice.transcriptionUrl, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${apiKey}` },
+        body: formData,
+        signal: AbortSignal.timeout(90000),
+      });
+      if (!response.ok) {
+        req.log?.warn({ providerId, modelId: provider.voice.transcriptionModelId, status: response.status }, "AI speech transcription failed");
+        res.status(502).json({ error: `${provider.name} не смог распознать запись. Проверьте доступ к голосовой модели и попробуйте ещё раз.` });
+        return;
+      }
+      const result = asRecord(await response.json());
+      const text = asString(result?.text);
+      if (!text) {
+        res.status(502).json({ error: `${provider.name} не вернул текст распознавания.` });
+        return;
+      }
+      res.json({ text });
+    } catch {
+      req.log?.error({ providerId, modelId: provider.voice.transcriptionModelId }, "AI speech transcription request failed");
+      res.status(502).json({ error: `Не удалось распознать вопрос через ${provider.name}.` });
+    }
+  },
+);
+
+router.post("/ai/voice/speech", requireSameOrigin, limitAiRequests, async (req, res): Promise<void> => {
+  setNoStore(res);
+  const body = asRecord(req.body);
+  const providerId = body?.providerId;
+  const text = asString(body?.text);
+  if (!isProviderId(providerId) || !text || text.length > MAX_VOICE_TEXT_LENGTH) {
+    res.status(400).json({ error: "Выберите провайдера и текст ответа для озвучивания." });
+    return;
+  }
+  const provider = providers[providerId];
+  const apiKey = getSessionApiKey(req, providerId);
+  if (!apiKey) {
+    res.status(409).json({ error: `Сначала подключите ключ ${provider.name} для текущего сеанса.` });
+    return;
+  }
+
+  try {
+    const response = await globalThis.fetch(provider.voice.speechUrl, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: provider.voice.speechModelId,
+        input: text,
+        voice: provider.voice.speechVoice,
+        response_format: "mp3",
+      }),
+      signal: AbortSignal.timeout(90000),
+    });
+    if (!response.ok) {
+      req.log?.warn({ providerId, modelId: provider.voice.speechModelId, status: response.status }, "AI speech synthesis failed");
+      res.status(502).json({ error: `${provider.name} не смог озвучить ответ. Проверьте доступ к голосовой модели.` });
+      return;
+    }
+    const audio = Buffer.from(await response.arrayBuffer());
+    if (audio.length === 0 || audio.length > 20 * 1024 * 1024) {
+      res.status(502).json({ error: `${provider.name} вернул некорректный аудиофайл.` });
+      return;
+    }
+    res.set("Content-Type", "audio/mpeg");
+    res.set("Content-Length", String(audio.length));
+    res.status(200).send(audio);
+  } catch {
+    req.log?.error({ providerId, modelId: provider.voice.speechModelId }, "AI speech synthesis request failed");
+    res.status(502).json({ error: `Не удалось озвучить ответ через ${provider.name}.` });
   }
 });
 
