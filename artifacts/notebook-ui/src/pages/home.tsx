@@ -14,6 +14,7 @@ import { NotebookAssistant } from "@/components/notebook-assistant";
 import { AiProviderSettings } from "@/components/ai-provider-settings";
 import { useListAiModels, useListAiProviders } from "@workspace/api-client-react";
 import type { AiSettings } from "@/lib/ai-settings";
+import { useSessionAiKey } from "@/lib/session-ai-key";
 import {
   getActiveAiModelId,
   readSavedAiSettings,
@@ -408,19 +409,55 @@ export default function Home() {
   const [notebookRevision, setNotebookRevision] = useState(0);
   const [aiSettings, setAiSettings] = useState<AiSettings>(readSavedAiSettings);
   const [allowOnlineAi, setAllowOnlineAi] = useState(false);
+  const [sessionKeyRevision, setSessionKeyRevision] = useState(0);
+  const { credential: sessionCredential, setCredential: setSessionCredential } = useSessionAiKey();
+  const sessionApiKey = sessionCredential?.providerId === aiSettings.providerId
+    ? sessionCredential.apiKey
+    : "";
   const aiProvidersQuery = useListAiProviders({ query: { staleTime: 60_000 } });
-  const aiModelsQuery = useListAiModels(
-    { providerId: aiSettings.providerId },
-    { query: { staleTime: 120_000 } },
-  );
-  const activeAiModelId = getActiveAiModelId(aiSettings);
   const selectedAiProvider = aiProvidersQuery.data?.providers.find(
     (provider) => provider.id === aiSettings.providerId,
   );
+  const canLoadModelCatalog = Boolean(
+    selectedAiProvider && (!selectedAiProvider.catalogRequiresKey || sessionApiKey),
+  );
+  const aiModelsQuery = useListAiModels(
+    { providerId: aiSettings.providerId },
+    {
+      query: {
+        staleTime: 120_000,
+        enabled: canLoadModelCatalog,
+        queryKey: ["listAiModels", aiSettings.providerId, sessionKeyRevision],
+      },
+      request: selectedAiProvider?.catalogRequiresKey && sessionApiKey
+        ? { headers: { "x-ai-provider-key": sessionApiKey } }
+        : undefined,
+    },
+  );
+  const activeAiModelId = getActiveAiModelId(aiSettings);
   const aiModelIsAvailable = aiModelsQuery.data?.models.some((model) => model.id === activeAiModelId) ?? false;
-  const aiReady = Boolean(selectedAiProvider?.configured && activeAiModelId && aiModelIsAvailable);
+  const aiReady = Boolean(sessionApiKey && selectedAiProvider && activeAiModelId && aiModelIsAvailable);
 
   const { toast } = useToast();
+  const handleAiSettingsChange = (nextSettings: AiSettings) => {
+    if (nextSettings.providerId !== aiSettings.providerId) {
+      setSessionCredential(null);
+      setSessionKeyRevision((revision) => revision + 1);
+      setAllowOnlineAi(false);
+    }
+    setAiSettings(nextSettings);
+  };
+  const applySessionApiKey = (apiKey: string) => {
+    setSessionCredential({ providerId: aiSettings.providerId, apiKey });
+    setSessionKeyRevision((revision) => revision + 1);
+    setAllowOnlineAi(false);
+  };
+  const clearSessionApiKey = () => {
+    setSessionCredential(null);
+    setSessionKeyRevision((revision) => revision + 1);
+    setAllowOnlineAi(false);
+  };
+
   useEffect(() => {
     saveAiSettings(aiSettings);
   }, [aiSettings]);
@@ -770,7 +807,10 @@ export default function Home() {
               providersLoading={aiProvidersQuery.isLoading}
               modelsLoading={aiModelsQuery.isLoading}
               catalogError={aiModelsQuery.isError}
-              onChange={setAiSettings}
+              sessionKeyActive={Boolean(sessionApiKey)}
+              onApplyApiKey={applySessionApiKey}
+              onClearApiKey={clearSessionApiKey}
+              onChange={handleAiSettingsChange}
             />
             <NotebookReader
               key={notebookRevision}
@@ -779,6 +819,7 @@ export default function Home() {
               providerId={aiSettings.providerId}
               modelId={activeAiModelId}
               profile={aiSettings.profile}
+              providerApiKey={sessionApiKey}
               aiReady={aiReady}
               allowOnlineAi={allowOnlineAi}
               onAllowOnlineAiChange={setAllowOnlineAi}
@@ -894,6 +935,7 @@ export default function Home() {
               providerId={aiSettings.providerId}
               modelId={activeAiModelId}
               profile={aiSettings.profile}
+              providerApiKey={sessionApiKey}
               aiReady={aiReady}
               allowOnlineAi={allowOnlineAi}
             />

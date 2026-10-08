@@ -128,7 +128,7 @@ paths:
       operationId: listAiProviders
       tags: [ai]
       summary: List supported AI providers
-      description: Returns providers and whether an API key is configured on the server
+      description: Returns supported providers and whether their model catalogs require a session key
       responses:
         "200":
           description: Supported providers
@@ -148,6 +148,9 @@ paths:
           required: true
           schema:
             $ref: "#/components/schemas/AiProviderId"
+      security:
+        - {}
+        - AiProviderSessionKey: []
       responses:
         "200":
           description: Provider models
@@ -158,7 +161,7 @@ paths:
         "400":
           description: Unsupported provider
         "409":
-          description: Provider API key is not configured
+          description: A session key is required for this catalog
         "502":
           description: Provider catalog is unavailable
 
@@ -167,7 +170,9 @@ paths:
       operationId: analyzeNotebookWithAi
       tags: [ai]
       summary: Analyze notebook content with a selected provider model
-      description: Sends notebook text to the selected AI provider; notebook cells are not executed
+      description: Uses a temporary session key to send notebook text to the selected AI provider; notebook cells are not executed
+      security:
+        - AiProviderSessionKey: []
       requestBody:
         required: true
         content:
@@ -184,7 +189,7 @@ paths:
         "400":
           description: Invalid request
         "409":
-          description: Provider API key is not configured or model is unavailable
+          description: Session key is missing or model is unavailable
         "502":
           description: Provider request failed
 
@@ -230,6 +235,12 @@ paths:
           description: Entry not found
 
 components:
+  securitySchemes:
+    AiProviderSessionKey:
+      type: apiKey
+      in: header
+      name: x-ai-provider-key
+      description: Temporary provider key held only in memory for the active app session
   schemas:
     HealthStatus:
       type: object
@@ -358,14 +369,15 @@ components:
 
     AiProvider:
       type: object
-      required: [id, name, configured]
+      required: [id, name, catalogRequiresKey]
       properties:
         id:
           $ref: "#/components/schemas/AiProviderId"
         name:
           type: string
-        configured:
+        catalogRequiresKey:
           type: boolean
+          description: Whether the provider requires a session key just to list models
 
     AiProvidersResult:
       type: object

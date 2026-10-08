@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { Settings2 } from "lucide-react";
 import type { AiModel, AiProvider } from "@workspace/api-client-react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { AiSettings, AiProfile } from "@/lib/ai-settings";
@@ -12,6 +13,9 @@ interface AiProviderSettingsProps {
   providersLoading: boolean;
   modelsLoading: boolean;
   catalogError: boolean;
+  sessionKeyActive: boolean;
+  onApplyApiKey: (apiKey: string) => void;
+  onClearApiKey: () => void;
   onChange: (settings: AiSettings) => void;
 }
 
@@ -30,10 +34,15 @@ export function AiProviderSettings({
   providersLoading,
   modelsLoading,
   catalogError,
+  sessionKeyActive,
+  onApplyApiKey,
+  onClearApiKey,
   onChange,
 }: AiProviderSettingsProps) {
   const [filter, setFilter] = useState("");
+  const [apiKeyDraft, setApiKeyDraft] = useState("");
   const provider = providers.find((item) => item.id === settings.providerId);
+  useEffect(() => setApiKeyDraft(""), [settings.providerId]);
   const filteredModels = useMemo(() => {
     const normalizedFilter = filter.trim().toLocaleLowerCase();
     if (!normalizedFilter) return models;
@@ -45,6 +54,13 @@ export function AiProviderSettings({
   const updateSettings = (patch: Partial<AiSettings>) => onChange({ ...settings, ...patch });
   const updateModel = (profile: AiProfile, modelId: string) => {
     updateSettings(profile === "review" ? { reviewModelId: modelId } : { economyModelId: modelId });
+  };
+  const applyApiKey = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const apiKey = apiKeyDraft.trim();
+    if (!apiKey) return;
+    onApplyApiKey(apiKey);
+    setApiKeyDraft("");
   };
 
   const renderModelSelect = (profile: AiProfile, value: string, label: string) => (
@@ -90,7 +106,7 @@ export function AiProviderSettings({
             <SelectContent>
               {providers.map((item) => (
                 <SelectItem key={item.id} value={item.id}>
-                  {item.name}{item.configured ? "" : " — нужен API-ключ"}
+                  {item.name}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -114,19 +130,60 @@ export function AiProviderSettings({
         {renderModelSelect("review", settings.reviewModelId, "Модель для проверки")}
         {renderModelSelect("economy", settings.economyModelId, "Модель для экономии и кода")}
       </div>
+      <form
+        onSubmit={applyApiKey}
+        className="mt-4 rounded-md border bg-muted/20 p-3"
+        data-testid="form-ai-provider-session-key"
+      >
+        <label htmlFor="input-ai-provider-key" className="mb-1.5 block text-xs font-medium">
+          API-ключ {provider?.name ?? "провайдера"} для текущего сеанса
+        </label>
+        <Input
+          id="input-ai-provider-key"
+          type="password"
+          value={apiKeyDraft}
+          onChange={(event) => setApiKeyDraft(event.target.value)}
+          placeholder={sessionKeyActive ? "Ключ активен; введите новый для замены" : "Вставьте ключ провайдера"}
+          autoComplete="new-password"
+          autoCapitalize="none"
+          spellCheck={false}
+          maxLength={4096}
+          aria-label="API-ключ провайдера на текущий сеанс"
+          data-testid="input-ai-provider-key"
+        />
+        <div className="mt-2 flex flex-wrap gap-2">
+          <Button type="submit" size="sm" disabled={!apiKeyDraft.trim()} data-testid="button-use-ai-provider-key">
+            {sessionKeyActive ? "Заменить ключ" : "Использовать в этом сеансе"}
+          </Button>
+          {sessionKeyActive && (
+            <Button type="button" variant="outline" size="sm" onClick={onClearApiKey} data-testid="button-clear-ai-provider-key">
+              Удалить ключ из сеанса
+            </Button>
+          )}
+        </div>
+        {sessionKeyActive ? (
+          <p className="mt-2 text-xs leading-5 text-muted-foreground" role="status" data-testid="text-ai-session-key-active">
+            Ключ активен для этой вкладки и хранится только в её памяти. После обновления или закрытия страницы его нужно ввести снова.
+          </p>
+        ) : (
+          <p className="mt-2 text-xs leading-5 text-muted-foreground">
+            Ключ не записывается в хранилище браузера, настройки приложения, базу или журналы. Он передаётся серверу только для запроса к выбранному провайдеру.
+          </p>
+        )}
+      </form>
       <div className="mt-3 space-y-1 text-xs leading-5 text-muted-foreground" aria-live="polite">
-        {provider && !provider.configured && (
+        {provider?.catalogRequiresKey && !sessionKeyActive && (
           <p data-testid="text-ai-provider-key-missing">
-            Для отправки вопросов добавьте {provider.id === "aitunnel" ? "AI_TUNNEL_API_KEY" : provider.id === "proxyapi" ? "PROXYAPI_API_KEY" : provider.id === "routerai" ? "ROUTERAI_API_KEY" : "OPENAI_API_KEY"} в Secrets проекта. Каталог может быть доступен и без ключа.
+            Чтобы загрузить каталог моделей {provider.name}, введите ключ для этого сеанса. Для AI-запроса ключ понадобится у любого провайдера.
           </p>
         )}
         {modelsLoading && <p>Загружаю актуальный список моделей выбранного провайдера…</p>}
         {catalogError && (
           <p className="text-destructive" role="status" data-testid="text-ai-model-catalog-error">
-            Не удалось загрузить каталог. Для ProxyAPI и OpenAI нужен ключ провайдера в Secrets проекта.
+            Не удалось загрузить каталог. Проверьте временный ключ и доступность API провайдера.
           </p>
         )}
-        {!modelsLoading && !catalogError && models.length === 0 && (
+        {!modelsLoading && !catalogError && models.length === 0 && !(provider?.catalogRequiresKey && !sessionKeyActive) && (
           <p>Каталог пока не содержит доступных текстовых моделей.</p>
         )}
         <Input

@@ -18,10 +18,10 @@ test.beforeEach(async ({ page }) => {
     await route.fulfill({
       json: {
         providers: [
-          { id: "aitunnel", name: "AI Tunnel", configured: true },
-          { id: "proxyapi", name: "ProxyAPI", configured: true },
-          { id: "routerai", name: "RouterAI", configured: true },
-          { id: "openai", name: "OpenAI", configured: true },
+          { id: "aitunnel", name: "AI Tunnel", catalogRequiresKey: false },
+          { id: "proxyapi", name: "ProxyAPI", catalogRequiresKey: true },
+          { id: "routerai", name: "RouterAI", catalogRequiresKey: false },
+          { id: "openai", name: "OpenAI", catalogRequiresKey: true },
         ],
       },
     });
@@ -110,8 +110,26 @@ test("uploads notebook text, parameters and saved results with the notebook help
     .toContainText("Этот текст описывает подготовку данных.");
 });
 
-test("assigns exact catalog models to review and economy profiles", async ({ page }) => {
+test("uses exact catalog models and keeps the provider key only for the current session", async ({ page }) => {
+  const testSessionKey = "test-only-session-key";
+  let sentApiKey = "";
+  await page.route("**/api/ai/analyze-notebook", async route => {
+    sentApiKey = route.request().headers()["x-ai-provider-key"] ?? "";
+    const request = route.request().postDataJSON() as { providerId: string; modelId: string };
+    await route.fulfill({
+      json: {
+        answer: `Ответ ИИ по модели ${request.modelId}`,
+        providerId: request.providerId,
+        modelId: request.modelId,
+        sources: [0],
+      },
+    });
+  });
+
   await page.getByTestId("input-upload-notebook").setInputFiles(notebookFixture);
+  await page.getByTestId("input-ai-provider-key").fill(testSessionKey);
+  await page.getByTestId("button-use-ai-provider-key").click();
+  await expect(page.getByTestId("text-ai-session-key-active")).toBeVisible();
 
   await page.getByTestId("select-ai-model-review").click();
   await page.getByRole("option", { name: /openai\/gpt-6\.1-sol/ }).click();
@@ -127,18 +145,32 @@ test("assigns exact catalog models to review and economy profiles", async ({ pag
     reviewModelId: "openai/gpt-6.1-sol",
     economyModelId: "qwen/qwen3.8-flash",
   });
+  const browserStorage = await page.evaluate(() => JSON.stringify({
+    local: Object.fromEntries(Object.entries(localStorage)),
+    session: Object.fromEntries(Object.entries(sessionStorage)),
+  }));
+  expect(browserStorage).not.toContain(testSessionKey);
 
   await page.getByTestId("checkbox-notebook-ai-consent").click();
   await page.getByTestId("input-assistant-question").fill("Объясни, что делает код");
   await page.getByTestId("button-submit-assistant-question").click();
   await expect(page.getByTestId("text-message-content-1"))
     .toContainText("Ответ ИИ по модели qwen/qwen3.8-flash");
+  expect(sentApiKey).toBe(testSessionKey);
+
+  await page.reload();
+  await page.getByTestId("input-upload-notebook").setInputFiles(notebookFixture);
+  await expect(page.getByTestId("text-ai-session-key-active")).toHaveCount(0);
+  await expect(page.getByTestId("input-ai-provider-key")).toHaveValue("");
+  await expect(page.getByTestId("checkbox-notebook-ai-consent")).toBeDisabled();
 });
 
 test("clears the previous notebook state after a successful replacement", async ({ page }) => {
   await page.getByTestId("input-upload-notebook").setInputFiles(notebookFixture);
   await page.getByTestId("select-ai-model-review").click();
   await page.getByRole("option", { name: /openai\/gpt-6\.1-sol/ }).click();
+  await page.getByTestId("input-ai-provider-key").fill("test-only-session-key");
+  await page.getByTestId("button-use-ai-provider-key").click();
   await page.getByTestId("parameter-prompt").fill("Пользовательский запрос первого блокнота");
   await page.getByTestId("button-run-cell-1").click();
   await expect(page.getByTestId("status-cell-simulated-1"))

@@ -13,6 +13,7 @@ type NotebookAssistantProps = {
   providerId: AiProviderId;
   modelId: string;
   profile: AiProfile;
+  providerApiKey: string;
   aiReady: boolean;
   allowOnlineAi: boolean;
 };
@@ -66,6 +67,7 @@ export function NotebookAssistant({
   providerId,
   modelId,
   profile,
+  providerApiKey,
   aiReady,
   allowOnlineAi,
 }: NotebookAssistantProps) {
@@ -76,7 +78,11 @@ export function NotebookAssistant({
   const nextMessageId = useRef(0);
   const form = useForm<{ question: string }>({ defaultValues: { question: "" } });
   const question = form.watch("question") ?? "";
-  const analyzeWithAi = useAnalyzeNotebookWithAi();
+  const analyzeWithAi = useAnalyzeNotebookWithAi({
+    request: providerApiKey
+      ? { headers: { "x-ai-provider-key": providerApiKey } }
+      : undefined,
+  });
   const canAsk = aiReady && allowOnlineAi && Boolean(modelId) && Boolean(notebookContext.trim()) && !isPending;
 
   const addMessage = (message: Omit<Message, "id">) => {

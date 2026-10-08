@@ -1,2 +1,2 @@
-- [Notebook reader and AI providers](notebook-reader-model.md) — local simulation stays separate from online AI; send notebook text only after consent to the selected provider.
+- [Notebook reader and AI providers](notebook-reader-model.md) — local simulation stays separate; session keys are never persisted and notebook text is sent only after consent.
 - [Notebook themes](notebook-themes.md) — keep both Light Waves and Windows 95 available as user-selectable Notebook UI styles.

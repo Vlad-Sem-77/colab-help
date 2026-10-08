@@ -15,7 +15,6 @@ type ModelInfo = AiCatalogModel;
 type ProviderConfig = {
   id: ProviderId;
   name: string;
-  apiKeyEnv: string;
   modelsUrl: string;
   chatUrl: string;
   catalogNeedsKey: boolean;
@@ -26,7 +25,6 @@ const providers: Record<ProviderId, ProviderConfig> = {
   aitunnel: {
     id: "aitunnel",
     name: "AI Tunnel",
-    apiKeyEnv: "AI_TUNNEL_API_KEY",
     modelsUrl: "https://api.aitunnel.ru/public/aitunnel/openrouter-models/chat",
     chatUrl: "https://api.aitunnel.ru/v1/chat/completions",
     catalogNeedsKey: false,
@@ -35,7 +33,6 @@ const providers: Record<ProviderId, ProviderConfig> = {
   proxyapi: {
     id: "proxyapi",
     name: "ProxyAPI",
-    apiKeyEnv: "PROXYAPI_API_KEY",
     modelsUrl: "https://api.proxyapi.ru/v1/models",
     chatUrl: "https://api.proxyapi.ru/v1/chat/completions",
     catalogNeedsKey: true,
@@ -44,7 +41,6 @@ const providers: Record<ProviderId, ProviderConfig> = {
   routerai: {
     id: "routerai",
     name: "RouterAI",
-    apiKeyEnv: "ROUTERAI_API_KEY",
     modelsUrl: "https://routerai.ru/api/v1/models",
     chatUrl: "https://routerai.ru/api/v1/chat/completions",
     catalogNeedsKey: false,
@@ -53,7 +49,6 @@ const providers: Record<ProviderId, ProviderConfig> = {
   openai: {
     id: "openai",
     name: "OpenAI",
-    apiKeyEnv: "OPENAI_API_KEY",
     modelsUrl: "https://api.openai.com/v1/models",
     chatUrl: "https://api.openai.com/v1/chat/completions",
     catalogNeedsKey: true,
@@ -66,13 +61,19 @@ const rateLimitBuckets = new Map<string, { expiresAt: number; count: number }>()
 const MODEL_CACHE_MS = 2 * 60 * 1000;
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT_MAX_REQUESTS = 20;
+const MAX_SESSION_API_KEY_LENGTH = 4096;
 
 function isProviderId(value: unknown): value is ProviderId {
   return typeof value === "string" && Object.hasOwn(providers, value);
 }
 
-function getApiKey(providerId: ProviderId): string | undefined {
-  return process.env[providers[providerId].apiKeyEnv]?.trim() || undefined;
+function getSessionApiKey(req: Request, res: Response): string | undefined {
+  const apiKey = req.get("x-ai-provider-key")?.trim();
+  if (apiKey && apiKey.length > MAX_SESSION_API_KEY_LENGTH) {
+    res.status(400).json({ error: "The provider key is too long." });
+    return undefined;
+  }
+  return apiKey || undefined;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -85,18 +86,19 @@ function asString(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
-async function loadModels(providerId: ProviderId): Promise<ModelInfo[]> {
-  const cached = modelCache.get(providerId);
-  if (cached && cached.expiresAt > Date.now()) return cached.models;
-
+async function loadModels(providerId: ProviderId, apiKey?: string): Promise<ModelInfo[]> {
   const provider = providers[providerId];
-  const apiKey = getApiKey(providerId);
   if (provider.catalogNeedsKey && !apiKey) {
-    throw new Error(`Add ${provider.apiKeyEnv} in Replit Secrets to load this provider's catalog.`);
+    throw new Error("A session API key is required to load this provider's catalog.");
+  }
+
+  if (!provider.catalogNeedsKey) {
+    const cached = modelCache.get(providerId);
+    if (cached && cached.expiresAt > Date.now()) return cached.models;
   }
 
   const response = await fetch(provider.modelsUrl, {
-    headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
+    headers: provider.catalogNeedsKey && apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
     signal: AbortSignal.timeout(15000),
   });
   if (!response.ok) {
@@ -104,7 +106,9 @@ async function loadModels(providerId: ProviderId): Promise<ModelInfo[]> {
   }
 
   const models = normalizeAiCatalog(providerId, await response.json());
-  modelCache.set(providerId, { expiresAt: Date.now() + MODEL_CACHE_MS, models });
+  if (!provider.catalogNeedsKey) {
+    modelCache.set(providerId, { expiresAt: Date.now() + MODEL_CACHE_MS, models });
+  }
   return models;
 }
 
@@ -113,7 +117,7 @@ router.get("/ai/providers", (_req, res): void => {
     providers: Object.values(providers).map(({ id, name }) => ({
       id,
       name,
-      configured: Boolean(getApiKey(id)),
+      catalogRequiresKey: providers[id].catalogNeedsKey,
     })),
   });
 });
@@ -125,12 +129,20 @@ router.get("/ai/models", async (req, res): Promise<void> => {
     return;
   }
 
+  const provider = providers[providerId];
+  const apiKey = getSessionApiKey(req, res);
+  if (res.headersSent) return;
+  if (provider.catalogNeedsKey && !apiKey) {
+    res.status(409).json({ error: `Enter a ${provider.name} API key for this session to load its catalog.` });
+    return;
+  }
+
   try {
-    const models = await loadModels(providerId);
+    const models = await loadModels(providerId, apiKey);
     res.json({ providerId, models, count: models.length });
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Could not load the provider catalog.";
-    const status = message.startsWith("Add ") ? 409 : 502;
+  } catch {
+    const message = "Could not load the provider catalog. Check the session key and provider availability.";
+    const status = 502;
     req.log?.warn({ providerId, status }, "AI provider catalog request failed");
     res.status(status).json({ error: message });
   }
@@ -201,14 +213,15 @@ router.post("/ai/analyze-notebook", requireSameOrigin, limitAiRequests, async (r
   }
 
   const provider = providers[providerId];
-  const apiKey = getApiKey(providerId);
+  const apiKey = getSessionApiKey(req, res);
+  if (res.headersSent) return;
   if (!apiKey) {
-    res.status(409).json({ error: `Add ${provider.apiKeyEnv} in Replit Secrets before using ${provider.name}.` });
+    res.status(409).json({ error: `Enter a ${provider.name} API key for this session before asking the AI.` });
     return;
   }
 
   try {
-    const models = await loadModels(providerId);
+    const models = await loadModels(providerId, apiKey);
     if (!models.some((model) => model.id === modelId)) {
       res.status(409).json({ error: "That model is no longer in the provider catalog. Refresh the model list." });
       return;
@@ -276,8 +289,8 @@ router.post("/ai/analyze-notebook", requireSameOrigin, limitAiRequests, async (r
       modelId,
       sources: extractNotebookSourceIndexes(notebookContext, answer),
     });
-  } catch (error: unknown) {
-    req.log?.error({ providerId, modelId, err: error }, "Notebook analysis via AI provider failed");
+  } catch {
+    req.log?.error({ providerId, modelId }, "Notebook analysis via AI provider failed");
     res.status(502).json({ error: `Could not get an answer from ${provider.name}. Check the connection and try again.` });
   }
 });
