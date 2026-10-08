@@ -446,7 +446,11 @@ export default function Home() {
       } catch (err) {
         toast({
           title: "Не удалось прочитать блокнот",
-          description: err instanceof Error ? err.message : "Проверьте файл .ipynb.",
+          description: err instanceof SyntaxError
+            ? "Файл повреждён: содержимое не является корректным JSON. Проверьте файл .ipynb и попробуйте снова."
+            : err instanceof Error
+              ? err.message
+              : "Проверьте файл .ipynb.",
           variant: "destructive",
         });
       }

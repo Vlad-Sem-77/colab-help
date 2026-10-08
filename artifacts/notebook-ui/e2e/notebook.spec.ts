@@ -5,6 +5,14 @@ const notebookFixture = fileURLToPath(
   new URL("./fixtures/notebook-browser-scenario.ipynb", import.meta.url),
 );
 
+function notebookFile(name: string, content: string) {
+  return {
+    name,
+    mimeType: "application/json",
+    buffer: Buffer.from(content),
+  };
+}
+
 test.beforeEach(async ({ page }) => {
   await page.goto("/notebook/");
 });
@@ -52,6 +60,57 @@ test("uploads notebook text, parameters and saved results with the notebook help
   await page.getByTestId("button-send-notebook-question").click();
   await expect(page.getByTestId("message-notebook-assistant-1"))
     .toContainText("Этот текст описывает подготовку данных.");
+});
+
+test("explains why malformed notebook files cannot be opened", async ({ page }) => {
+  const notifications = page.getByRole("region", { name: "Notifications (F8)" });
+  const malformedFiles = [
+    notebookFile("broken-json.ipynb", '{"cells": ['),
+    notebookFile("missing-cells.ipynb", '{"metadata": {}}'),
+    notebookFile("non-array-cells.ipynb", '{"cells": {}}'),
+  ];
+
+  for (const file of malformedFiles) {
+    await page.getByTestId("input-upload-notebook").setInputFiles(file);
+
+    await expect(notifications.getByText("Не удалось прочитать блокнот", { exact: true }))
+      .toBeVisible();
+    await expect(page.getByTestId("card-notebook-upload")).toBeVisible();
+    if (file.name === "broken-json.ipynb") {
+      await expect(notifications.getByText(
+        "Файл повреждён: содержимое не является корректным JSON. Проверьте файл .ipynb и попробуйте снова.",
+        { exact: true },
+      )).toBeVisible();
+    } else {
+      await expect(notifications.getByText(
+        "Файл не похож на Jupyter/Colab-блокнот: ожидался объект с массивом cells.",
+        { exact: true },
+      )).toBeVisible();
+    }
+  }
+});
+
+test("keeps the open notebook available after a failed replacement upload", async ({ page }) => {
+  const notifications = page.getByRole("region", { name: "Notifications (F8)" });
+  await page.getByTestId("input-upload-notebook").setInputFiles(notebookFixture);
+  await expect(page.getByTestId("text-cell-explanation-0"))
+    .toContainText("Этот текст описывает подготовку данных.");
+
+  const invalidReplacements = [
+    notebookFile("replacement-broken-json.ipynb", "{ invalid"),
+    notebookFile("replacement-without-cells.ipynb", '{"metadata": {}}'),
+  ];
+
+  for (const file of invalidReplacements) {
+    await page.getByTestId("input-replace-notebook").setInputFiles(file);
+
+    await expect(notifications.getByText("Не удалось прочитать блокнот", { exact: true }))
+      .toBeVisible();
+    await expect(page.getByTestId("text-cell-explanation-0"))
+      .toContainText("Этот текст описывает подготовку данных.");
+    await expect(page.getByTestId("card-notebook-assistant")).toBeVisible();
+    await expect(page.getByTestId("button-download-notebook")).toBeVisible();
+  }
 });
 
 test("restores opted-in cell settings after reload and lets the user reset them", async ({ page }) => {
