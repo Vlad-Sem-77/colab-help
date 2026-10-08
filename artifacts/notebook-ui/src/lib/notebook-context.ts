@@ -122,8 +122,10 @@ function importsIn(source: string): Set<string> {
   return imports;
 }
 
-function scoreSharedIdentifiers(source: string, targetIdentifiers: Set<string>): number {
-  const candidateIdentifiers = identifiersIn(source);
+function scoreSharedIdentifiers(
+  candidateIdentifiers: ReadonlySet<string>,
+  targetIdentifiers: ReadonlySet<string>,
+): number {
   let score = 0;
   for (const identifier of targetIdentifiers) {
     if (candidateIdentifiers.has(identifier)) score += identifier.length >= 8 ? 2 : 1;
@@ -132,11 +134,13 @@ function scoreSharedIdentifiers(source: string, targetIdentifiers: Set<string>):
 }
 
 function relevantCellIndexes(notebook: Notebook, targetIndex: number): number[] {
+  const sources = notebook.cells.map(getCellSource);
+  const identifiersByCell = sources.map(identifiersIn);
+  const importsByCell = sources.map(importsIn);
   const target = notebook.cells[targetIndex];
-  const targetSource = getCellSource(target);
   const selected = new Set<number>([targetIndex]);
-  const targetImports = importsIn(targetSource);
-  const targetIdentifiers = identifiersIn(targetSource);
+  const targetImports = importsByCell[targetIndex];
+  const targetIdentifiers = identifiersByCell[targetIndex];
 
   for (let index = targetIndex - 1; index >= 0; index -= 1) {
     if (notebook.cells[index].type === "markdown") {
@@ -154,14 +158,11 @@ function relevantCellIndexes(notebook: Notebook, targetIndex: number): number[] 
   }
 
   const importMatches = notebook.cells
-    .map((cell, index) => ({
-      index,
-      score: index === targetIndex
-        ? 0
-        : [...importsIn(getCellSource(cell))]
-          .filter((binding) => targetIdentifiers.has(binding)).length,
-      isImportCell: importsIn(getCellSource(cell)).size > 0,
-    }))
+    .map((_, index) => {
+      const cellImports = importsByCell[index];
+      const score = [...cellImports].filter((binding) => targetIdentifiers.has(binding)).length;
+      return { index, score, isImportCell: cellImports.size > 0 };
+    })
     .filter((candidate) => candidate.isImportCell && candidate.score > 0)
     .sort((left, right) => right.score - left.score || Math.abs(left.index - targetIndex) - Math.abs(right.index - targetIndex))
     .slice(0, 2);
@@ -172,15 +173,16 @@ function relevantCellIndexes(notebook: Notebook, targetIndex: number): number[] 
     : new Set([...targetIdentifiers].filter((identifier) => identifier.length >= 4));
   const relatedCode = notebook.cells
     .map((cell, index) => {
-      const source = getCellSource(cell);
-      const score = index === targetIndex ? 0 : scoreSharedIdentifiers(source, usageIdentifiers);
+      const score = index === targetIndex
+        ? 0
+        : scoreSharedIdentifiers(identifiersByCell[index], usageIdentifiers);
       return { index, score, type: cell.type };
     })
     .filter(({ index, score, type }) => (
       index !== targetIndex
       && (type === "code" || type === "parameter")
       && score > 0
-      && (targetImports.size > 0 || score >= 2 || scoreSharedIdentifiers(getCellSource(notebook.cells[index]), usageIdentifiers) >= 2)
+      && (targetImports.size > 0 || score >= 2)
     ))
     .sort((left, right) => right.score - left.score || Math.abs(left.index - targetIndex) - Math.abs(right.index - targetIndex))
     .slice(0, targetImports.size > 0 ? 3 : 2);

@@ -27,7 +27,6 @@ import {
   saveAiSettings,
 } from "@/lib/ai-settings";
 import {
-  Notebook,
   NotebookCell,
   ParamInfo,
   CellEnabledState,
