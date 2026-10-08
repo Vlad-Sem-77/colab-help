@@ -6,6 +6,14 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './aiModel';
+export * from './aiModelsResult';
+export * from './aiNotebookAnalysisInput';
+export * from './aiNotebookAnalysisInputProfile';
+export * from './aiNotebookAnalysisResult';
+export * from './aiProvider';
+export * from './aiProviderId';
+export * from './aiProvidersResult';
 export * from './colabPingResult';
 export * from './colabUrlInput';
 export * from './comparisonItem';
@@ -20,6 +28,7 @@ export * from './freeModel';
 export * from './freeModelsResult';
 export * from './healthStatus';
 export * from './historyEntry';
+export * from './listAiModelsParams';
 export * from './modelCard';
 export * from './notebookAnalysisInput';
 export * from './notebookAnalysisResult';

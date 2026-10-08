@@ -135,6 +135,74 @@ export const AnalyzeNotebookResponse = zod.object({
 
 
 /**
+ * Returns providers and whether an API key is configured on the server
+ * @summary List supported AI providers
+ */
+export const ListAiProvidersResponse = zod.object({
+  "providers": zod.array(zod.object({
+  "id": zod.enum(['aitunnel', 'proxyapi', 'routerai', 'openai']),
+  "name": zod.string(),
+  "configured": zod.boolean()
+}))
+})
+
+
+/**
+ * @summary List models from a provider catalog
+ */
+export const ListAiModelsQueryParams = zod.object({
+  "providerId": zod.enum(['aitunnel', 'proxyapi', 'routerai', 'openai'])
+})
+
+export const ListAiModelsResponse = zod.object({
+  "providerId": zod.enum(['aitunnel', 'proxyapi', 'routerai', 'openai']),
+  "models": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "description": zod.string().nullish(),
+  "ownedBy": zod.string().nullish(),
+  "contextLength": zod.number().int().nullish(),
+  "inputPricePerMillion": zod.number().nullish(),
+  "outputPricePerMillion": zod.number().nullish(),
+  "currency": zod.string().nullish()
+})),
+  "count": zod.number().int()
+})
+
+
+/**
+ * Sends notebook text to the selected AI provider; notebook cells are not executed
+ * @summary Analyze notebook content with a selected provider model
+ */
+export const analyzeNotebookWithAiBodyModelIdMax = 200;
+
+export const analyzeNotebookWithAiBodyNotebookContextMax = 32000;
+
+export const analyzeNotebookWithAiBodyQuestionMax = 12000;
+
+
+
+export const AnalyzeNotebookWithAiBody = zod.object({
+  "providerId": zod.enum(['aitunnel', 'proxyapi', 'routerai', 'openai']),
+  "modelId": zod.string().min(1).max(analyzeNotebookWithAiBodyModelIdMax),
+  "profile": zod.enum(['review', 'economy']),
+  "notebookContext": zod.string().min(1).max(analyzeNotebookWithAiBodyNotebookContextMax),
+  "question": zod.string().min(1).max(analyzeNotebookWithAiBodyQuestionMax)
+})
+
+export const analyzeNotebookWithAiResponseSourcesItemMin = 0;
+
+
+
+export const AnalyzeNotebookWithAiResponse = zod.object({
+  "answer": zod.string(),
+  "providerId": zod.enum(['aitunnel', 'proxyapi', 'routerai', 'openai']),
+  "modelId": zod.string(),
+  "sources": zod.array(zod.number().int().min(analyzeNotebookWithAiResponseSourcesItemMin)).describe('Zero-based cell indexes cited by the model and present in the supplied notebook context')
+})
+
+
+/**
  * Returns the list of recent experiments
  * @summary Get experiment history
  */

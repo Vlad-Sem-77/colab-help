@@ -3,7 +3,7 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: Replit-Colab Bridge API
+  description: Notebook reading, AI-provider catalog, and Colab bridge API
 servers:
   - url: /api
     description: Base API path
@@ -12,6 +12,8 @@ tags:
     description: Health operations
   - name: colab
     description: Colab connection and execution
+  - name: ai
+    description: Direct AI-provider catalogs and notebook analysis
   - name: history
     description: Experiment history
 paths:
@@ -120,6 +122,71 @@ paths:
           description: Bad request
         "502":
           description: Colab server error
+
+  /ai/providers:
+    get:
+      operationId: listAiProviders
+      tags: [ai]
+      summary: List supported AI providers
+      description: Returns providers and whether an API key is configured on the server
+      responses:
+        "200":
+          description: Supported providers
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiProvidersResult"
+
+  /ai/models:
+    get:
+      operationId: listAiModels
+      tags: [ai]
+      summary: List models from a provider catalog
+      parameters:
+        - name: providerId
+          in: query
+          required: true
+          schema:
+            $ref: "#/components/schemas/AiProviderId"
+      responses:
+        "200":
+          description: Provider models
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiModelsResult"
+        "400":
+          description: Unsupported provider
+        "409":
+          description: Provider API key is not configured
+        "502":
+          description: Provider catalog is unavailable
+
+  /ai/analyze-notebook:
+    post:
+      operationId: analyzeNotebookWithAi
+      tags: [ai]
+      summary: Analyze notebook content with a selected provider model
+      description: Sends notebook text to the selected AI provider; notebook cells are not executed
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AiNotebookAnalysisInput"
+      responses:
+        "200":
+          description: Notebook analysis
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AiNotebookAnalysisResult"
+        "400":
+          description: Invalid request
+        "409":
+          description: Provider API key is not configured or model is unavailable
+        "502":
+          description: Provider request failed
 
   /history:
     get:
@@ -278,6 +345,103 @@ components:
           type: string
         model:
           type: ["string", "null"]
+        sources:
+          type: array
+          description: Zero-based cell indexes cited by the model and present in the supplied notebook context
+          items:
+            type: integer
+            minimum: 0
+
+    AiProviderId:
+      type: string
+      enum: [aitunnel, proxyapi, routerai, openai]
+
+    AiProvider:
+      type: object
+      required: [id, name, configured]
+      properties:
+        id:
+          $ref: "#/components/schemas/AiProviderId"
+        name:
+          type: string
+        configured:
+          type: boolean
+
+    AiProvidersResult:
+      type: object
+      required: [providers]
+      properties:
+        providers:
+          type: array
+          items:
+            $ref: "#/components/schemas/AiProvider"
+
+    AiModel:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        ownedBy:
+          type: ["string", "null"]
+        contextLength:
+          type: ["integer", "null"]
+        inputPricePerMillion:
+          type: ["number", "null"]
+        outputPricePerMillion:
+          type: ["number", "null"]
+        currency:
+          type: ["string", "null"]
+
+    AiModelsResult:
+      type: object
+      required: [providerId, models, count]
+      properties:
+        providerId:
+          $ref: "#/components/schemas/AiProviderId"
+        models:
+          type: array
+          items:
+            $ref: "#/components/schemas/AiModel"
+        count:
+          type: integer
+
+    AiNotebookAnalysisInput:
+      type: object
+      required: [providerId, modelId, profile, notebookContext, question]
+      properties:
+        providerId:
+          $ref: "#/components/schemas/AiProviderId"
+        modelId:
+          type: string
+          minLength: 1
+          maxLength: 200
+        profile:
+          type: string
+          enum: [review, economy]
+        notebookContext:
+          type: string
+          minLength: 1
+          maxLength: 32000
+        question:
+          type: string
+          minLength: 1
+          maxLength: 12000
+
+    AiNotebookAnalysisResult:
+      type: object
+      required: [answer, providerId, modelId, sources]
+      properties:
+        answer:
+          type: string
+        providerId:
+          $ref: "#/components/schemas/AiProviderId"
+        modelId:
+          type: string
         sources:
           type: array
           description: Zero-based cell indexes cited by the model and present in the supplied notebook context

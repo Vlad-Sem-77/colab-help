@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { BookOpen, MessageCircle, Send } from "lucide-react";
+import { useAnalyzeNotebookWithAi } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -16,11 +17,17 @@ import {
   answerNotebookQuestion,
   Notebook,
 } from "@/lib/notebook";
+import type { AiProfile, AiProviderId } from "@/lib/ai-settings";
 
 interface NotebookReaderProps {
   notebook: Notebook;
   notebookContext: string;
-  colabUrl: string | null;
+  providerId: AiProviderId;
+  modelId: string;
+  profile: AiProfile;
+  aiReady: boolean;
+  allowOnlineAi: boolean;
+  onAllowOnlineAiChange: (allow: boolean) => void;
 }
 
 interface ChatMessage {
@@ -30,13 +37,6 @@ interface ChatMessage {
   answerMode?: "local" | "ai" | "fallback";
 }
 
-interface NotebookAnalysisResult {
-  answer?: unknown;
-  model?: unknown;
-  sources?: unknown;
-  error?: unknown;
-}
-
 const suggestedQuestions = [
   "Какова структура ноутбука?",
   "Какие библиотеки он использует?",
@@ -44,6 +44,7 @@ const suggestedQuestions = [
 ];
 
 const MAX_QUESTION_LENGTH = 12_000;
+const MAX_CONTEXT_LENGTH = 32_000;
 
 function composeQuestion(question: string, messages: ChatMessage[]) {
   const previousMessages = messages
@@ -57,11 +58,20 @@ function composeQuestion(question: string, messages: ChatMessage[]) {
   return conversation.slice(-MAX_QUESTION_LENGTH);
 }
 
-export function NotebookReader({ notebook, notebookContext, colabUrl }: NotebookReaderProps) {
+export function NotebookReader({
+  notebook,
+  notebookContext,
+  providerId,
+  modelId,
+  profile,
+  aiReady,
+  allowOnlineAi,
+  onAllowOnlineAiChange,
+}: NotebookReaderProps) {
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [allowColabAi, setAllowColabAi] = useState(false);
   const [isPending, setIsPending] = useState(false);
+  const analyzeWithAi = useAnalyzeNotebookWithAi();
   const analysis = useMemo(() => analyzeNotebook(notebook), [notebook]);
   const sectionCellIndexes = useMemo(() => {
     const indexes: number[] = [];
@@ -73,8 +83,6 @@ export function NotebookReader({ notebook, notebookContext, colabUrl }: Notebook
     });
     return indexes;
   }, [notebook]);
-  const hasColabConnection = Boolean(colabUrl?.trim());
-
   const ask = async (rawQuestion: string) => {
     const trimmedQuestion = rawQuestion.trim();
     if (!trimmedQuestion || isPending) return;
@@ -83,7 +91,7 @@ export function NotebookReader({ notebook, notebookContext, colabUrl }: Notebook
     setQuestion("");
     setMessages((current) => [...current, { role: "user", text: trimmedQuestion }]);
 
-    if (!allowColabAi || !colabUrl?.trim()) {
+    if (!allowOnlineAi || !aiReady || !modelId) {
       setMessages((current) => [
         ...current,
         { role: "assistant", text: localAnswer.text, sources: localAnswer.sources, answerMode: "local" },
@@ -93,30 +101,16 @@ export function NotebookReader({ notebook, notebookContext, colabUrl }: Notebook
 
     setIsPending(true);
     try {
-      const response = await fetch("/api/colab/analyze-notebook", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          colabUrl,
-          notebookContext,
+      const result = await analyzeWithAi.mutateAsync({
+        data: {
+          providerId,
+          modelId,
+          profile,
+          notebookContext: notebookContext.slice(0, MAX_CONTEXT_LENGTH),
           question: composeQuestion(trimmedQuestion, messages),
-        }),
-        signal: AbortSignal.timeout(90_000),
+        },
       });
-      const result = await response.json() as NotebookAnalysisResult;
-      if (!response.ok) {
-        throw new Error(
-          typeof result.error === "string" && result.error.trim()
-            ? result.error
-            : `Сервер вернул HTTP ${response.status}.`,
-        );
-      }
-      if (typeof result.answer !== "string" || !result.answer.trim()) {
-        throw new Error("Модель не вернула текст ответа.");
-      }
-      const sources = Array.isArray(result.sources)
-        ? result.sources.filter((source): source is number => Number.isInteger(source) && source >= 0)
-        : [];
+      const sources = result.sources.filter((source) => Number.isInteger(source) && source >= 0);
       if (sources.length === 0) {
         throw new Error("Ответ модели не содержит ссылок на ячейки.");
       }
@@ -125,7 +119,7 @@ export function NotebookReader({ notebook, notebookContext, colabUrl }: Notebook
         ...current,
         {
           role: "assistant",
-          text: result.answer as string,
+          text: result.answer,
           sources,
           answerMode: "ai",
         },
@@ -245,20 +239,20 @@ export function NotebookReader({ notebook, notebookContext, colabUrl }: Notebook
             <div className="flex items-start gap-2.5 text-sm">
               <Checkbox
                 id="notebook-ai-consent"
-                checked={allowColabAi}
-                onCheckedChange={(checked) => setAllowColabAi(checked === true)}
-                disabled={!hasColabConnection || isPending}
-                aria-label="Разрешить отправку содержимого ноутбука в подключённую AI-модель"
+                checked={allowOnlineAi}
+                onCheckedChange={(checked) => onAllowOnlineAiChange(checked === true)}
+                disabled={!aiReady || isPending}
+                aria-label="Разрешить отправку содержимого ноутбука выбранному AI-провайдеру"
                 data-testid="checkbox-notebook-ai-consent"
               />
               <label htmlFor="notebook-ai-consent" className="cursor-pointer font-medium leading-5">
-                Использовать AI через подключённый Colab
+                Разрешить онлайн-анализ выбранной моделью
               </label>
             </div>
             <p className="mt-2 pl-6 text-xs leading-5 text-muted-foreground">
-              {hasColabConnection
-                ? "При включении вопрос, содержимое ячеек и текстовые результаты отправляются через ваш Colab-сервер в настроенную там модель OpenRouter. Условия хранения данных зависят от этого провайдера. Ячейки ноутбука не запускаются."
-                : "Подключите Colab, чтобы включить AI. Без подключения вопросы обрабатываются только локально."}
+              {aiReady
+                ? "При включении вопрос, код, текст и сохранённые результаты ячеек отправляются выбранному провайдеру. Условия хранения зависят от него. Код не запускается."
+                : "Сначала выберите модель из каталога и настройте API-ключ провайдера. До этого ответы строятся локально."}
             </p>
           </div>
 
@@ -342,7 +336,7 @@ export function NotebookReader({ notebook, notebookContext, colabUrl }: Notebook
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Enter — отправить, Shift+Enter — новая строка. AI-режим выключен, пока вы не разрешите передачу содержимого ноутбука.
+            Enter — отправить, Shift+Enter — новая строка. Передача ноутбука в онлайн-ИИ возможна только после вашего разрешения.
           </p>
         </CardContent>
       </Card>

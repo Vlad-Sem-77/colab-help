@@ -25,6 +25,10 @@ import type {
 } from '@tanstack/react-query';
 
 import type {
+  AiModelsResult,
+  AiNotebookAnalysisInput,
+  AiNotebookAnalysisResult,
+  AiProvidersResult,
   ColabPingResult,
   ColabUrlInput,
   ExperimentInput,
@@ -32,6 +36,7 @@ import type {
   FreeModelsResult,
   HealthStatus,
   HistoryEntry,
+  ListAiModelsParams,
   NotebookAnalysisInput,
   NotebookAnalysisResult
 } from './api.schemas';
@@ -519,6 +524,305 @@ export const useAnalyzeNotebook = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getAnalyzeNotebookMutationOptions(options), queryClient);
+    }
+
+export const getListAiProvidersUrl = () => {
+
+
+
+
+  return `/api/ai/providers`
+}
+
+/**
+ * Returns providers and whether an API key is configured on the server
+ * @summary List supported AI providers
+ */
+export const listAiProviders = async ( options?: Parameters<typeof customFetch>[1]): Promise<AiProvidersResult> => {
+
+  return customFetch<AiProvidersResult>(getListAiProvidersUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAiProvidersQueryKey = () => {
+    return [
+    `/api/ai/providers`
+    ] as const;
+    }
+
+
+export const getListAiProvidersQueryOptions = <TData = Awaited<ReturnType<typeof listAiProviders>>, TError = ErrorType<unknown>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAiProviders>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAiProvidersQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAiProviders>>> = ({ signal }) => listAiProviders({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAiProviders>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListAiProvidersQueryResult = NonNullable<Awaited<ReturnType<typeof listAiProviders>>>
+export type ListAiProvidersQueryError = ErrorType<unknown>
+
+
+export function useListAiProviders<TData = Awaited<ReturnType<typeof listAiProviders>>, TError = ErrorType<unknown>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAiProviders>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAiProviders>>,
+          TError,
+          Awaited<ReturnType<typeof listAiProviders>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListAiProviders<TData = Awaited<ReturnType<typeof listAiProviders>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAiProviders>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAiProviders>>,
+          TError,
+          Awaited<ReturnType<typeof listAiProviders>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListAiProviders<TData = Awaited<ReturnType<typeof listAiProviders>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAiProviders>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List supported AI providers
+ */
+
+export function useListAiProviders<TData = Awaited<ReturnType<typeof listAiProviders>>, TError = ErrorType<unknown>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAiProviders>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListAiProvidersQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListAiModelsUrl = (params: ListAiModelsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/ai/models?${stringifiedParams}` : `/api/ai/models`
+}
+
+/**
+ * @summary List models from a provider catalog
+ */
+export const listAiModels = async (params: ListAiModelsParams, options?: Parameters<typeof customFetch>[1]): Promise<AiModelsResult> => {
+
+  return customFetch<AiModelsResult>(getListAiModelsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAiModelsQueryKey = (params?: ListAiModelsParams,) => {
+    return [
+    `/api/ai/models`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListAiModelsQueryOptions = <TData = Awaited<ReturnType<typeof listAiModels>>, TError = ErrorType<void>>(params: ListAiModelsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAiModels>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAiModelsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAiModels>>> = ({ signal }) => listAiModels(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAiModels>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type ListAiModelsQueryResult = NonNullable<Awaited<ReturnType<typeof listAiModels>>>
+export type ListAiModelsQueryError = ErrorType<void>
+
+
+export function useListAiModels<TData = Awaited<ReturnType<typeof listAiModels>>, TError = ErrorType<void>>(
+ params: ListAiModelsParams, options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAiModels>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAiModels>>,
+          TError,
+          Awaited<ReturnType<typeof listAiModels>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListAiModels<TData = Awaited<ReturnType<typeof listAiModels>>, TError = ErrorType<void>>(
+ params: ListAiModelsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAiModels>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof listAiModels>>,
+          TError,
+          Awaited<ReturnType<typeof listAiModels>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useListAiModels<TData = Awaited<ReturnType<typeof listAiModels>>, TError = ErrorType<void>>(
+ params: ListAiModelsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAiModels>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary List models from a provider catalog
+ */
+
+export function useListAiModels<TData = Awaited<ReturnType<typeof listAiModels>>, TError = ErrorType<void>>(
+ params: ListAiModelsParams, options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof listAiModels>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getListAiModelsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getAnalyzeNotebookWithAiUrl = () => {
+
+
+
+
+  return `/api/ai/analyze-notebook`
+}
+
+/**
+ * Sends notebook text to the selected AI provider; notebook cells are not executed
+ * @summary Analyze notebook content with a selected provider model
+ */
+export const analyzeNotebookWithAi = async (aiNotebookAnalysisInput: AiNotebookAnalysisInput, options?: Parameters<typeof customFetch>[1]): Promise<AiNotebookAnalysisResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<AiNotebookAnalysisResult>(getAnalyzeNotebookWithAiUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(aiNotebookAnalysisInput)
+  }
+);}
+
+
+
+
+
+export const getAnalyzeNotebookWithAiMutationKey = () => ['analyzeNotebookWithAi'] as const;
+
+export const getAnalyzeNotebookWithAiMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof analyzeNotebookWithAi>>, TError,AnalyzeNotebookWithAiMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof analyzeNotebookWithAi>>, TError,AnalyzeNotebookWithAiMutationVariables, TContext> => {
+
+const mutationKey = getAnalyzeNotebookWithAiMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof analyzeNotebookWithAi>>, AnalyzeNotebookWithAiMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  analyzeNotebookWithAi(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type AnalyzeNotebookWithAiMutationResult = NonNullable<Awaited<ReturnType<typeof analyzeNotebookWithAi>>>
+    export type AnalyzeNotebookWithAiMutationBody = BodyType<AiNotebookAnalysisInput>
+    export type AnalyzeNotebookWithAiMutationError = ErrorType<void>
+    export type AnalyzeNotebookWithAiMutationVariables = {data: BodyType<AiNotebookAnalysisInput>}
+
+    /**
+ * @summary Analyze notebook content with a selected provider model
+ */
+export const useAnalyzeNotebookWithAi = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof analyzeNotebookWithAi>>, TError,AnalyzeNotebookWithAiMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof analyzeNotebookWithAi>>,
+        TError,
+        AnalyzeNotebookWithAiMutationVariables,
+        TContext
+      > => {
+      return useMutation(getAnalyzeNotebookWithAiMutationOptions(options), queryClient);
     }
 
 export const getListHistoryUrl = () => {

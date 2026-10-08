@@ -1,14 +1,20 @@
 import { useRef, useState } from "react";
 import { AlertCircle, ArrowUp, BookOpenText, Check, CircleHelp, LoaderCircle, LockKeyhole, Sparkles, UserRound } from "lucide-react";
+import { useAnalyzeNotebookWithAi } from "@workspace/api-client-react";
 import { useForm } from "react-hook-form";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Form, FormControl, FormField, FormItem, FormLabel } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
+import type { AiProfile, AiProviderId } from "@/lib/ai-settings";
 
 type NotebookAssistantProps = {
   notebookContext: string;
-  colabUrl: string | null;
+  providerId: AiProviderId;
+  modelId: string;
+  profile: AiProfile;
+  aiReady: boolean;
+  allowOnlineAi: boolean;
 };
 
 type Message = {
@@ -52,10 +58,17 @@ function readableError(error: unknown) {
   if (error instanceof Error && error.message.trim()) {
     return `Не удалось получить ответ. ${error.message}`;
   }
-  return "Не удалось получить ответ. Проверьте подключение к Colab и попробуйте ещё раз.";
+  return "Не удалось получить ответ. Проверьте выбранного провайдера и попробуйте ещё раз.";
 }
 
-export function NotebookAssistant({ notebookContext, colabUrl }: NotebookAssistantProps) {
+export function NotebookAssistant({
+  notebookContext,
+  providerId,
+  modelId,
+  profile,
+  aiReady,
+  allowOnlineAi,
+}: NotebookAssistantProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [retryRequest, setRetryRequest] = useState<RetryRequest | null>(null);
@@ -63,8 +76,8 @@ export function NotebookAssistant({ notebookContext, colabUrl }: NotebookAssista
   const nextMessageId = useRef(0);
   const form = useForm<{ question: string }>({ defaultValues: { question: "" } });
   const question = form.watch("question") ?? "";
-  const hasConnection = Boolean(colabUrl?.trim());
-  const canAsk = hasConnection && Boolean(notebookContext.trim()) && !isPending;
+  const analyzeWithAi = useAnalyzeNotebookWithAi();
+  const canAsk = aiReady && allowOnlineAi && Boolean(modelId) && Boolean(notebookContext.trim()) && !isPending;
 
   const addMessage = (message: Omit<Message, "id">) => {
     const id = nextMessageId.current++;
@@ -72,41 +85,29 @@ export function NotebookAssistant({ notebookContext, colabUrl }: NotebookAssista
   };
 
   const requestAnswer = async (displayQuestion: string, apiQuestion: string, addUserMessage: boolean) => {
-    if (!colabUrl?.trim() || !notebookContext.trim()) return;
+    if (!canAsk) return;
     setErrorMessage(null);
     setRetryRequest(null);
     if (addUserMessage) addMessage({ role: "user", content: displayQuestion });
 
     try {
       setIsPending(true);
-      const response = await fetch("/api/colab/analyze-notebook", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          colabUrl,
+      const result = await analyzeWithAi.mutateAsync({
+        data: {
+          providerId,
+          modelId,
+          profile,
           notebookContext: notebookContext.slice(0, MAX_CONTEXT_LENGTH),
           question: apiQuestion.slice(0, MAX_QUESTION_LENGTH),
-        }),
+        },
       });
-      const result = await response.json() as {
-        answer?: unknown;
-        model?: unknown;
-        error?: unknown;
-      };
-      if (!response.ok) {
-        throw new Error(
-          typeof result.error === "string" && result.error.trim()
-            ? result.error
-            : `Сервер вернул HTTP ${response.status}.`,
-        );
-      }
-      if (typeof result.answer !== "string" || !result.answer.trim()) {
+      if (!result.answer.trim()) {
         throw new Error("Сервер не вернул текст ответа.");
       }
       addMessage({
         role: "assistant",
         content: result.answer,
-        model: typeof result.model === "string" ? result.model : null,
+        model: result.modelId,
       });
     } catch (error) {
       setErrorMessage(readableError(error));
@@ -181,16 +182,26 @@ export function NotebookAssistant({ notebookContext, colabUrl }: NotebookAssista
       </div>
 
       <div className="space-y-5 px-5 py-5 sm:px-6">
-        {!hasConnection && (
+        {!aiReady && (
           <div
             className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
             role="status"
-            data-testid="status-colab-required"
+            data-testid="status-ai-provider-required"
           >
             <CircleHelp className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" aria-hidden="true" />
             <p>
-              Чтобы задать вопрос, подключите Colab — добавьте URL сервера в панели подключения.
+              Для онлайн-ответа выберите модель и добавьте API-ключ выбранного провайдера в Secrets проекта.
             </p>
+          </div>
+        )}
+        {aiReady && !allowOnlineAi && (
+          <div
+            className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+            role="status"
+            data-testid="status-ai-consent-required"
+          >
+            <CircleHelp className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" aria-hidden="true" />
+            <p>Сначала разрешите онлайн-анализ в карточке «Спросить о ноутбуке» выше.</p>
           </div>
         )}
 
@@ -200,8 +211,8 @@ export function NotebookAssistant({ notebookContext, colabUrl }: NotebookAssista
         >
           <LockKeyhole className="mt-0.5 h-4 w-4 shrink-0 text-[#597967]" aria-hidden="true" />
           <p>
-            Текст ноутбука отправляется подключённой модели Colab для анализа и не сохраняется в истории экспериментов.
-            Ячейки ноутбука не выполняются.
+            При отправке вопроса текст ноутбука передаётся выбранному AI-провайдеру. Провайдер может хранить запросы по своим правилам.
+            Кодовые ячейки не запускаются. Не отправляйте секретные данные.
           </p>
         </div>
 
@@ -315,7 +326,7 @@ export function NotebookAssistant({ notebookContext, colabUrl }: NotebookAssista
                         placeholder="Спросите о назначении ноутбука, коде, параметрах или результатах…"
                         className="min-h-[96px] resize-y border-slate-300 bg-white pr-12 text-sm leading-6 placeholder:text-slate-400 focus-visible:ring-[#6c907a]"
                         maxLength={2_000}
-                        disabled={!hasConnection || isPending}
+                        disabled={!aiReady || !allowOnlineAi || isPending}
                         aria-describedby="assistant-input-help"
                         data-testid="input-assistant-question"
                       />

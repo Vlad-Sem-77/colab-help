@@ -14,6 +14,54 @@ function notebookFile(name: string, content: string) {
 }
 
 test.beforeEach(async ({ page }) => {
+  await page.route("**/api/ai/providers", async route => {
+    await route.fulfill({
+      json: {
+        providers: [
+          { id: "aitunnel", name: "AI Tunnel", configured: true },
+          { id: "proxyapi", name: "ProxyAPI", configured: true },
+          { id: "routerai", name: "RouterAI", configured: true },
+          { id: "openai", name: "OpenAI", configured: true },
+        ],
+      },
+    });
+  });
+  await page.route("**/api/ai/models**", async route => {
+    const providerId = new URL(route.request().url()).searchParams.get("providerId") ?? "aitunnel";
+    await route.fulfill({
+      json: {
+        providerId,
+        count: 2,
+        models: [
+          {
+            id: "openai/gpt-6.1-sol",
+            name: "openai/gpt-6.1-sol",
+            inputPricePerMillion: 400,
+            outputPricePerMillion: 2000,
+            currency: "RUB",
+          },
+          {
+            id: "qwen/qwen3.8-flash",
+            name: "qwen/qwen3.8-flash",
+            inputPricePerMillion: 30,
+            outputPricePerMillion: 94,
+            currency: "RUB",
+          },
+        ],
+      },
+    });
+  });
+  await page.route("**/api/ai/analyze-notebook", async route => {
+    const request = route.request().postDataJSON() as { providerId: string; modelId: string };
+    await route.fulfill({
+      json: {
+        answer: `Ответ ИИ по модели ${request.modelId}`,
+        providerId: request.providerId,
+        modelId: request.modelId,
+        sources: [0],
+      },
+    });
+  });
   await page.goto("/notebook/");
 });
 
@@ -62,44 +110,50 @@ test("uploads notebook text, parameters and saved results with the notebook help
     .toContainText("Этот текст описывает подготовку данных.");
 });
 
-test("clears the previous notebook state after a successful replacement", async ({ page }) => {
-  const runRequests: unknown[] = [];
-  await page.route("**/api/colab/run", async route => {
-    runRequests.push(route.request().postDataJSON());
-    await route.fulfill({
-      json: {
-        status: "ok",
-        taskType: "text_generation",
-        mode: "auto",
-        result: "Результат запуска первого блокнота",
-        error: null,
-      },
-    });
-  });
-  await page.route("**/api/colab/analyze-notebook", async route => {
-    await route.fulfill({
-      json: { answer: "Ответ помощника по первому блокноту", model: "test-model" },
-    });
+test("assigns exact catalog models to review and economy profiles", async ({ page }) => {
+  await page.getByTestId("input-upload-notebook").setInputFiles(notebookFixture);
+
+  await page.getByTestId("select-ai-model-review").click();
+  await page.getByRole("option", { name: /openai\/gpt-6\.1-sol/ }).click();
+  await page.getByTestId("select-ai-model-economy").click();
+  await page.getByRole("option", { name: /qwen\/qwen3\.8-flash/ }).click();
+  await page.getByTestId("select-ai-profile").click();
+  await page.getByRole("option", { name: "Экономия и помощь с кодом" }).click();
+  await expect.poll(() => page.evaluate(() => {
+    const saved = localStorage.getItem("notebook-ui-ai-settings-v1");
+    return saved ? JSON.parse(saved) : null;
+  })).toMatchObject({
+    profile: "economy",
+    reviewModelId: "openai/gpt-6.1-sol",
+    economyModelId: "qwen/qwen3.8-flash",
   });
 
-  await page.getByTestId("input-colab-url").fill("https://example.trycloudflare.com");
+  await page.getByTestId("checkbox-notebook-ai-consent").click();
+  await page.getByTestId("input-assistant-question").fill("Объясни, что делает код");
+  await page.getByTestId("button-submit-assistant-question").click();
+  await expect(page.getByTestId("text-message-content-1"))
+    .toContainText("Ответ ИИ по модели qwen/qwen3.8-flash");
+});
+
+test("clears the previous notebook state after a successful replacement", async ({ page }) => {
   await page.getByTestId("input-upload-notebook").setInputFiles(notebookFixture);
+  await page.getByTestId("select-ai-model-review").click();
+  await page.getByRole("option", { name: /openai\/gpt-6\.1-sol/ }).click();
   await page.getByTestId("parameter-prompt").fill("Пользовательский запрос первого блокнота");
   await page.getByTestId("button-run-cell-1").click();
-  await expect(page.getByTestId("result-live-browser-parameters"))
-    .toContainText("Результат запуска первого блокнота");
-  expect(JSON.stringify(runRequests))
-    .toContain("Пользовательский запрос первого блокнота");
+  await expect(page.getByTestId("status-cell-simulated-1"))
+    .toContainText("Пройдена в симуляции");
 
   await page.getByTestId("input-notebook-question").fill("Что происходит в ячейке 1?");
   await page.getByTestId("button-send-notebook-question").click();
   await expect(page.getByTestId("message-notebook-assistant-1"))
     .toContainText("Этот текст описывает подготовку данных.");
 
+  await page.getByTestId("checkbox-notebook-ai-consent").click();
   await page.getByTestId("input-assistant-question").fill("Объясни первый блокнот");
   await page.getByTestId("button-submit-assistant-question").click();
   await expect(page.getByTestId("text-message-content-1"))
-    .toContainText("Ответ помощника по первому блокноту");
+    .toContainText("Ответ ИИ по модели openai/gpt-6.1-sol");
 
   const replacement = notebookFile("second-notebook.ipynb", JSON.stringify({
     cells: [
@@ -133,6 +187,8 @@ test("clears the previous notebook state after a successful replacement", async 
     .toContainText("Содержимое второго документа.");
   await expect(page.getByTestId("parameter-prompt"))
     .toHaveValue("Запрос второго блокнота");
+  await expect(page.getByTestId("checkbox-notebook-ai-consent")).not.toBeChecked();
+  await expect(page.getByTestId("text-message-content-1")).toHaveCount(0);
   await expect(page.getByTestId("text-cell-output-saved-result-0"))
     .toContainText("Результат второго блокнота");
   await expect(page.getByTestId("result-live-browser-parameters")).toHaveCount(0);
@@ -224,10 +280,14 @@ test("restores opted-in cell settings after reload and lets the user reset them"
 });
 
 test("simulates enabled cells without requiring Colab or sending code", async ({ page }) => {
-  const colabRequests: string[] = [];
+  const executionRequests: string[] = [];
   page.on("request", request => {
-    if (request.url().includes("/api/colab/execute") || request.url().includes("/api/colab/run")) {
-      colabRequests.push(request.url());
+    if (
+      request.url().includes("/api/colab/execute")
+      || request.url().includes("/api/colab/run")
+      || request.url().includes("/api/ai/analyze-notebook")
+    ) {
+      executionRequests.push(request.url());
     }
   });
 
@@ -243,14 +303,18 @@ test("simulates enabled cells without requiring Colab or sending code", async ({
     .toContainText("Код не выполнялся");
   await expect(page.getByTestId("badge-saved-output-saved-result"))
     .toContainText("Сохранённый результат из исходного .ipynb");
-  expect(colabRequests).toEqual([]);
+  expect(executionRequests).toEqual([]);
 });
 
 test("simulation does not claim to catch runtime errors or fabricate outputs", async ({ page }) => {
-  const colabRequests: string[] = [];
+  const executionRequests: string[] = [];
   page.on("request", request => {
-    if (request.url().includes("/api/colab/execute") || request.url().includes("/api/colab/run")) {
-      colabRequests.push(request.url());
+    if (
+      request.url().includes("/api/colab/execute")
+      || request.url().includes("/api/colab/run")
+      || request.url().includes("/api/ai/analyze-notebook")
+    ) {
+      executionRequests.push(request.url());
     }
   });
 
@@ -278,7 +342,7 @@ test("simulation does not claim to catch runtime errors or fabricate outputs", a
   await expect(page.getByTestId("simulation-no-output-failed"))
     .toContainText("Код не выполнялся");
   await expect(page.getByTestId("status-cell-skipped-3")).toBeVisible();
-  expect(colabRequests).toEqual([]);
+  expect(executionRequests).toEqual([]);
 });
 
 test("keeps the loaded notebook within a mobile viewport", async ({ page }) => {

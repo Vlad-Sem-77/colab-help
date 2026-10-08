@@ -100,6 +100,88 @@ export interface NotebookAnalysisResult {
   sources?: number[];
 }
 
+export type AiProviderId = typeof AiProviderId[keyof typeof AiProviderId];
+
+
+export const AiProviderId = {
+  aitunnel: 'aitunnel',
+  proxyapi: 'proxyapi',
+  routerai: 'routerai',
+  openai: 'openai',
+} as const;
+
+export interface AiProvider {
+  id: AiProviderId;
+  name: string;
+  configured: boolean;
+}
+
+export interface AiProvidersResult {
+  providers: AiProvider[];
+}
+
+export interface AiModel {
+  id: string;
+  name: string;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  ownedBy?: string | null;
+  /** @nullable */
+  contextLength?: number | null;
+  /** @nullable */
+  inputPricePerMillion?: number | null;
+  /** @nullable */
+  outputPricePerMillion?: number | null;
+  /** @nullable */
+  currency?: string | null;
+}
+
+export interface AiModelsResult {
+  providerId: AiProviderId;
+  models: AiModel[];
+  count: number;
+}
+
+export type AiNotebookAnalysisInputProfile = typeof AiNotebookAnalysisInputProfile[keyof typeof AiNotebookAnalysisInputProfile];
+
+
+export const AiNotebookAnalysisInputProfile = {
+  review: 'review',
+  economy: 'economy',
+} as const;
+
+export interface AiNotebookAnalysisInput {
+  providerId: AiProviderId;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  modelId: string;
+  profile: AiNotebookAnalysisInputProfile;
+  /**
+     * @minLength 1
+     * @maxLength 32000
+     */
+  notebookContext: string;
+  /**
+     * @minLength 1
+     * @maxLength 12000
+     */
+  question: string;
+}
+
+export interface AiNotebookAnalysisResult {
+  answer: string;
+  providerId: AiProviderId;
+  modelId: string;
+  /**
+     * Zero-based cell indexes cited by the model and present in the supplied notebook context
+     * @items.minimum 0
+     */
+  sources: number[];
+}
+
 export interface ModelCard {
   id: string;
   name: string;
@@ -174,4 +256,8 @@ export interface HistoryEntry {
   modelContextLength?: number | null;
   createdAt: string;
 }
+
+export type ListAiModelsParams = {
+providerId: AiProviderId;
+};
 

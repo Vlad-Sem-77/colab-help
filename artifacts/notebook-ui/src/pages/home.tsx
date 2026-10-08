@@ -11,6 +11,14 @@ import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { buildNotebookContext } from "@/lib/notebook-context";
 import { NotebookAssistant } from "@/components/notebook-assistant";
+import { AiProviderSettings } from "@/components/ai-provider-settings";
+import { useListAiModels, useListAiProviders } from "@workspace/api-client-react";
+import type { AiSettings } from "@/lib/ai-settings";
+import {
+  getActiveAiModelId,
+  readSavedAiSettings,
+  saveAiSettings,
+} from "@/lib/ai-settings";
 import {
   Notebook,
   NotebookCell,
@@ -29,7 +37,6 @@ import {
   saveCellEnabledState,
   setCellEnabled,
 } from "@/lib/notebook";
-import { useColabUrl } from "@/hooks/use-colab-url";
 import { NotebookReader } from "@/components/notebook-reader";
 
 type NotebookTheme = "light-waves" | "windows95";
@@ -399,9 +406,29 @@ export default function Home() {
   const [isBatchRunning, setIsBatchRunning] = useState(false);
   const [batchRunState, setBatchRunState] = useState<BatchRunState | null>(null);
   const [notebookRevision, setNotebookRevision] = useState(0);
-  
-  const { colabUrl } = useColabUrl();
+  const [aiSettings, setAiSettings] = useState<AiSettings>(readSavedAiSettings);
+  const [allowOnlineAi, setAllowOnlineAi] = useState(false);
+  const aiProvidersQuery = useListAiProviders({ query: { staleTime: 60_000 } });
+  const aiModelsQuery = useListAiModels(
+    { providerId: aiSettings.providerId },
+    { query: { staleTime: 120_000 } },
+  );
+  const activeAiModelId = getActiveAiModelId(aiSettings);
+  const selectedAiProvider = aiProvidersQuery.data?.providers.find(
+    (provider) => provider.id === aiSettings.providerId,
+  );
+  const aiModelIsAvailable = aiModelsQuery.data?.models.some((model) => model.id === activeAiModelId) ?? false;
+  const aiReady = Boolean(selectedAiProvider?.configured && activeAiModelId && aiModelIsAvailable);
+
   const { toast } = useToast();
+  useEffect(() => {
+    saveAiSettings(aiSettings);
+  }, [aiSettings]);
+
+  useEffect(() => {
+    setAllowOnlineAi(false);
+  }, [notebookRevision]);
+
   useEffect(() => {
     document.documentElement.dataset.notebookTheme = theme;
     try {
@@ -736,11 +763,25 @@ export default function Home() {
               </section>
             )}
 
+            <AiProviderSettings
+              settings={aiSettings}
+              providers={aiProvidersQuery.data?.providers ?? []}
+              models={aiModelsQuery.data?.models ?? []}
+              providersLoading={aiProvidersQuery.isLoading}
+              modelsLoading={aiModelsQuery.isLoading}
+              catalogError={aiModelsQuery.isError}
+              onChange={setAiSettings}
+            />
             <NotebookReader
               key={notebookRevision}
               notebook={notebook}
               notebookContext={notebookContext}
-              colabUrl={colabUrl || null}
+              providerId={aiSettings.providerId}
+              modelId={activeAiModelId}
+              profile={aiSettings.profile}
+              aiReady={aiReady}
+              allowOnlineAi={allowOnlineAi}
+              onAllowOnlineAiChange={setAllowOnlineAi}
             />
 
             <div className="notebook-cell-list">
@@ -850,7 +891,11 @@ export default function Home() {
             <NotebookAssistant
               key={`assistant-${notebookRevision}`}
               notebookContext={notebookContext}
-              colabUrl={colabUrl}
+              providerId={aiSettings.providerId}
+              modelId={activeAiModelId}
+              profile={aiSettings.profile}
+              aiReady={aiReady}
+              allowOnlineAi={allowOnlineAi}
             />
           </div>
         )}

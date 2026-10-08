@@ -1,43 +1,8 @@
-import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Book, History, Settings, Download, Wifi, WifiOff, Loader2 } from "lucide-react";
-import { useColabUrl } from "@/hooks/use-colab-url";
-import { usePingColab } from "@workspace/api-client-react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
+import { Book, History, Settings2 } from "lucide-react";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
-  const { colabUrl, setColabUrl } = useColabUrl();
-  const { toast } = useToast();
-  const [pingStatus, setPingStatus] = useState<"idle" | "ok" | "err">("idle");
-
-  const pingMutation = usePingColab({
-    mutation: {
-      onSuccess: (data) => {
-        setPingStatus(data.online ? "ok" : "err");
-        toast({
-          title: data.online ? "Подключено" : "Нет соединения",
-          description: data.message,
-          variant: data.online ? "default" : "destructive",
-        });
-      },
-      onError: () => {
-        setPingStatus("err");
-        toast({ title: "Ошибка", description: "Не удалось выполнить запрос", variant: "destructive" });
-      },
-    },
-  });
-
-  const handlePing = () => {
-    if (!colabUrl) {
-      toast({ title: "Введите URL", description: "Вставьте Cloudflare URL из Colab", variant: "destructive" });
-      return;
-    }
-    setPingStatus("idle");
-    pingMutation.mutate({ data: { colabUrl } });
-  };
 
   return (
     <div className="notebook-app-shell flex h-screen w-full bg-background text-foreground overflow-hidden">
@@ -62,56 +27,17 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </Link>
         </nav>
 
-        <div className="notebook-connect-panel p-4 border-t border-border bg-muted/30 space-y-3">
-          <div className="notebook-connect-form">
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
-                  <Settings className="w-4 h-4" />
-                  <span>Colab для ИИ</span>
-                </div>
-                {pingStatus === "ok" && <Wifi className="w-4 h-4 text-green-500" />}
-                {pingStatus === "err" && <WifiOff className="w-4 h-4 text-red-500" />}
-              </div>
-              <div className="notebook-connect-controls">
-                <Input
-                  placeholder="https://xxxx.trycloudflare.com"
-                  value={colabUrl}
-                  onChange={(e) => { setColabUrl(e.target.value); setPingStatus("idle"); }}
-                  className="bg-background text-xs"
-                  data-testid="input-colab-url"
-                />
-                <Button
-                  size="sm"
-                  className="notebook-ping-button w-full text-xs gap-1.5"
-                  onClick={handlePing}
-                  disabled={pingMutation.isPending}
-                  data-testid="button-ping-colab"
-                >
-                  {pingMutation.isPending ? (
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                  ) : pingStatus === "ok" ? (
-                    <Wifi className="w-3 h-3" />
-                  ) : (
-                    <Wifi className="w-3 h-3" />
-                  )}
-                  {pingMutation.isPending ? "Проверка..." : pingStatus === "ok" ? "ONLINE — PING" : "PING"}
-                </Button>
-              </div>
-              <p
-                className="text-xs leading-relaxed text-muted-foreground"
-                data-testid="notice-colab-optional"
-              >
-                Симуляция ячеек работает без Colab. Подключение нужно только для онлайн-помощника.
-              </p>
-            </div>
+        <div className="notebook-connect-panel space-y-2 border-t border-border bg-muted/30 p-4">
+          <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+            <Settings2 className="h-4 w-4" />
+            <span>ИИ-консультант</span>
           </div>
-          <a className="notebook-download-colab" href="/api/colab/notebook" download="colab_backend.ipynb">
-            <Button variant="outline" size="sm" className="w-full text-xs gap-1.5">
-              <Download className="w-3 h-3" />
-              Скачать служебный Colab-ноутбук
-            </Button>
-          </a>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            Выберите провайдера и модели в блоке «ИИ-провайдер и модели» после загрузки блокнота.
+          </p>
+          <p className="text-xs leading-relaxed text-muted-foreground">
+            Colab не нужен для просмотра и симуляции ячеек. Онлайн-вопросы отправляются выбранному AI-провайдеру только после вашего разрешения.
+          </p>
         </div>
       </aside>
 
