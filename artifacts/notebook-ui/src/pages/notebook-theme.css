@@ -597,6 +597,40 @@ html[data-notebook-theme="light-waves"] .notebook-parameter-source {
   color: #52645a;
 }
 
+html[data-notebook-theme="light-waves"] .notebook-code-source .hljs-keyword {
+  color: #94558f;
+  font-weight: 600;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-code-source .hljs-built_in {
+  color: #2f766b;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-code-source .hljs-title,
+html[data-notebook-theme="light-waves"] .notebook-code-source .hljs-function-call {
+  color: #3b6fa1;
+  font-weight: 600;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-code-source .hljs-variable,
+html[data-notebook-theme="light-waves"] .notebook-code-source .hljs-params {
+  color: #70539a;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-code-source .hljs-comment {
+  color: #66875e;
+  font-style: italic;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-code-source .hljs-string {
+  color: #ae4d69;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-code-source .hljs-number,
+html[data-notebook-theme="light-waves"] .notebook-code-source .hljs-literal {
+  color: #a96538;
+}
+
 html[data-notebook-theme="light-waves"] .notebook-cell-explanation {
   border-color: #e8ebe4;
   color: #75847c;
@@ -968,6 +1002,40 @@ html[data-notebook-theme="windows95"] .notebook-parameter-source {
   border-radius: 0;
   background: #f4f4f4;
   color: #202020;
+}
+
+html[data-notebook-theme="windows95"] .notebook-code-source .hljs-keyword {
+  color: #873e80;
+  font-weight: 700;
+}
+
+html[data-notebook-theme="windows95"] .notebook-code-source .hljs-built_in {
+  color: #17666d;
+}
+
+html[data-notebook-theme="windows95"] .notebook-code-source .hljs-title,
+html[data-notebook-theme="windows95"] .notebook-code-source .hljs-function-call {
+  color: #164c89;
+  font-weight: 700;
+}
+
+html[data-notebook-theme="windows95"] .notebook-code-source .hljs-variable,
+html[data-notebook-theme="windows95"] .notebook-code-source .hljs-params {
+  color: #704b91;
+}
+
+html[data-notebook-theme="windows95"] .notebook-code-source .hljs-comment {
+  color: #277047;
+  font-style: italic;
+}
+
+html[data-notebook-theme="windows95"] .notebook-code-source .hljs-string {
+  color: #a83e62;
+}
+
+html[data-notebook-theme="windows95"] .notebook-code-source .hljs-number,
+html[data-notebook-theme="windows95"] .notebook-code-source .hljs-literal {
+  color: #98551f;
 }
 
 html[data-notebook-theme="windows95"] .notebook-parameter-grid {

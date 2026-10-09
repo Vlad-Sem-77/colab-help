@@ -163,6 +163,42 @@ test("shows distinct enabled and disabled cell switch colors in Windows 95", asy
   await expect(cellSwitch).toHaveCSS("background-color", "rgb(198, 198, 198)");
 });
 
+test("highlights Python keywords, comments, functions, variables, and strings", async ({ page }) => {
+  const source = [
+    "import pandas as pd",
+    "# Remove rows without data",
+    "def clean_rows(frame):",
+    "    cleaned = frame.dropna()",
+    "    return cleaned",
+    'clean_rows("source")',
+  ];
+  const file = notebookFile(
+    "syntax-highlighting.ipynb",
+    JSON.stringify({
+      cells: [{ cell_type: "code", id: "python-highlight", source }],
+      nbformat: 4,
+      nbformat_minor: 5,
+    }),
+  );
+
+  await page.getByTestId("input-upload-notebook").setInputFiles(file);
+  const code = page.locator(".notebook-code-source").first();
+  await expect(code.locator(".hljs-keyword", { hasText: "import" })).toBeVisible();
+  await expect(code.locator(".hljs-comment")).toHaveText("# Remove rows without data");
+  await expect(code.locator(".hljs-title.function_")).toHaveText("clean_rows");
+  await expect(code.locator(".hljs-variable", { hasText: /^cleaned$/ })).toBeVisible();
+  await expect(code.locator(".hljs-function-call", { hasText: "dropna" })).toBeVisible();
+  await expect(code.locator(".hljs-string")).toHaveText('"source"');
+  expect(await code.evaluate((element) => element.textContent))
+    .toBe(source.join("\n"));
+
+  await page.getByTestId("button-theme-windows95").click();
+  await expect(code.locator(".hljs-comment"))
+    .toHaveCSS("color", "rgb(39, 112, 71)");
+  await expect(code.locator(".hljs-string"))
+    .toHaveCSS("color", "rgb(168, 62, 98)");
+});
+
 test("shows a short AI Tunnel list and model choices for other providers", async ({ page }) => {
   await page.getByTestId("input-upload-notebook").setInputFiles(notebookFixture);
 

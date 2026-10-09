@@ -13,6 +13,7 @@ import { useToast } from "@/hooks/use-toast";
 import { buildNotebookCellContext, buildNotebookContext } from "@/lib/notebook-context";
 import { NotebookAssistant } from "@/components/notebook-assistant";
 import { AiProviderSettings } from "@/components/ai-provider-settings";
+import { PythonCode } from "@/components/python-code";
 import {
   getListAiProvidersQueryKey,
   useExplainNotebookCellsWithAi,
@@ -1043,9 +1044,7 @@ export default function Home() {
                           )}
 
                           {cell.type === 'code' && (
-                            <pre className="notebook-code-source text-sm font-mono p-4 rounded bg-muted/50 overflow-x-auto whitespace-pre-wrap break-words text-blue-100">
-                              {getNotebookCellSourceForDisplay(cell.source)}
-                            </pre>
+                            <PythonCode source={getNotebookCellSourceForDisplay(cell.source)} />
                           )}
 
                           {cell.type === 'parameter' && (
