@@ -156,7 +156,7 @@ test("shows distinct enabled and disabled cell switch colors in Windows 95", asy
 
   const cellSwitch = page.getByTestId("switch-cell-enabled-1");
   await expect(cellSwitch).toHaveAttribute("data-state", "checked");
-  await expect(cellSwitch).toHaveCSS("background-color", "rgb(21, 62, 105)");
+  await expect(cellSwitch).toHaveCSS("background-color", "rgb(183, 161, 215)");
 
   await cellSwitch.click();
   await expect(cellSwitch).toHaveAttribute("data-state", "unchecked");
