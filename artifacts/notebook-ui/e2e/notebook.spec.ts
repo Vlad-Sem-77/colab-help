@@ -548,6 +548,32 @@ test("displays line-array code source as separate wrapped lines", async ({ page 
     .toBe(source.join("\n"));
 });
 
+test("preserves line breaks in Markdown notebook cells", async ({ page }) => {
+  const source = ["Описание ноутбука", "", "Следующая строка"];
+  const file = notebookFile(
+    "multiline-markdown.ipynb",
+    JSON.stringify({
+      cells: [
+        {
+          cell_type: "markdown",
+          id: "multiline-markdown",
+          source,
+        },
+      ],
+      nbformat: 4,
+      nbformat_minor: 5,
+    }),
+  );
+
+  await page.getByTestId("input-upload-notebook").setInputFiles(file);
+
+  const textCell = page.locator(".notebook-markdown-source").first();
+  await expect(textCell).toBeVisible();
+  await expect(textCell).toHaveCSS("white-space", "pre-wrap");
+  await expect.poll(() => textCell.evaluate((element) => element.textContent))
+    .toBe(source.join("\n"));
+});
+
 test("explains why malformed notebook files cannot be opened", async ({ page }) => {
   const notifications = page.getByRole("region", { name: "Notifications (F8)" });
   const malformedFiles = [

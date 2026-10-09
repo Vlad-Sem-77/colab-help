@@ -1037,8 +1037,8 @@ export default function Home() {
 
                         <div className="notebook-cell-body p-4">
                           {cell.type === 'markdown' && (
-                            <div className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground">
-                              {cell.source.join("")}
+                            <div className="notebook-markdown-source prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap break-words text-muted-foreground">
+                              {getNotebookCellSourceForDisplay(cell.source)}
                             </div>
                           )}
 
