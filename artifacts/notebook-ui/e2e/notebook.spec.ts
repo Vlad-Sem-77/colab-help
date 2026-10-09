@@ -186,7 +186,7 @@ test("highlights Python keywords, comments, functions, variables, and strings", 
   await expect(code.locator(".hljs-keyword", { hasText: "import" })).toBeVisible();
   await expect(code.locator(".hljs-comment")).toHaveText("# Remove rows without data");
   await expect(code.locator(".hljs-title.function_")).toHaveText("clean_rows");
-  await expect(code.locator(".hljs-variable", { hasText: /^cleaned$/ })).toBeVisible();
+  await expect(code.locator(".hljs-variable", { hasText: /^cleaned$/ })).toHaveCount(2);
   await expect(code.locator(".hljs-function-call", { hasText: "dropna" })).toBeVisible();
   await expect(code.locator(".hljs-string")).toHaveText('"source"');
   expect(await code.evaluate((element) => element.textContent))
