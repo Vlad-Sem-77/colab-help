@@ -92,10 +92,14 @@ test("switches notebook styles and restores the selected style after reload", as
 
   await page.getByTestId("input-upload-notebook").setInputFiles(notebookFixture);
   const notebookCell = page.locator(".notebook-cell").first();
+  const codeSource = page.locator(".notebook-code-source").first();
+  const parameterSource = page.locator(".notebook-parameter-source").first();
   await expect.poll(() => notebookCell.evaluate(element => getComputedStyle(element).borderWidth))
     .toBe("0px");
   await expect.poll(() => notebookCell.evaluate(element => getComputedStyle(element).clipPath))
     .toBe("none");
+  await expect.poll(() => codeSource.evaluate(element => getComputedStyle(element).backgroundColor))
+    .toBe("rgb(244, 246, 241)");
 
   await windows95Button.click();
   await expect(windows95Button).toHaveAttribute("aria-pressed", "true");
@@ -106,6 +110,12 @@ test("switches notebook styles and restores the selected style after reload", as
     .toContain("4px");
   await expect.poll(() => notebookCell.evaluate(element => getComputedStyle(element).boxShadow))
     .toContain("inset");
+  await expect.poll(() => codeSource.evaluate(element => getComputedStyle(element).backgroundColor))
+    .toBe("rgb(244, 244, 244)");
+  await expect.poll(() => codeSource.evaluate(element => getComputedStyle(element).color))
+    .toBe("rgb(32, 32, 32)");
+  await expect.poll(() => parameterSource.evaluate(element => getComputedStyle(element).backgroundColor))
+    .toBe("rgb(244, 244, 244)");
   await expect.poll(() => page.evaluate(() => localStorage.getItem("notebook-ui-theme")))
     .toBe("windows95");
 

@@ -940,18 +940,13 @@ html[data-notebook-theme="windows95"] .notebook-code-source,
 html[data-notebook-theme="windows95"] .notebook-parameter-source {
   border: 1px solid #555;
   border-radius: 0;
-  background: #17212b;
-  color: #d7e3ed;
+  background: #f4f4f4;
+  color: #202020;
 }
 
 html[data-notebook-theme="windows95"] .notebook-parameter-grid {
   grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
   gap: 12px;
-}
-
-html[data-notebook-theme="windows95"] .notebook-parameter-source {
-  background: #242424;
-  color: #efc47f;
 }
 
 html[data-notebook-theme="windows95"] .notebook-cell-explanation {
