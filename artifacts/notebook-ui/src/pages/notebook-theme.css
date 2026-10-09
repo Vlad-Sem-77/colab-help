@@ -490,6 +490,12 @@ html[data-notebook-theme="light-waves"] .notebook-reader-panels [data-testid="ca
   scroll-margin-block-start: 1rem;
 }
 
+.notebook-cell-explanation [data-testid^="text-cell-explanation-"] {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  text-wrap: pretty;
+}
+
 html[data-notebook-theme="light-waves"] .notebook-cell-list::before {
   position: absolute;
   z-index: 0;
@@ -565,6 +571,12 @@ html[data-notebook-theme="light-waves"] .notebook-cell-status-skipped {
   background: #fff2eb;
   color: #98583d;
   font-size: 10px;
+}
+
+html[data-notebook-theme="light-waves"] .notebook-cell-status-skipped-streaming {
+  border-color: #153e69 !important;
+  background: #153e69 !important;
+  color: #fff !important;
 }
 
 html[data-notebook-theme="light-waves"] .notebook-cell-toggle-note {
@@ -853,7 +865,7 @@ html[data-notebook-theme="windows95"] .notebook-cell-list {
 }
 
 html[data-notebook-theme="windows95"] .notebook-cell {
-  border-color: #6f6f6f;
+  border-color: #5f5f5f;
   clip-path: polygon(
     0 4px,
     4px 0,
@@ -866,8 +878,8 @@ html[data-notebook-theme="windows95"] .notebook-cell {
   );
   overflow: hidden;
   box-shadow:
-    1px 1px 0 #fff inset,
-    -1px -1px 0 #747474 inset,
+    2px 2px 0 #fff inset,
+    -2px -2px 0 #676767 inset,
     0 1px 1px rgba(0, 0, 0, 0.16);
   transition: opacity 160ms ease;
 }
@@ -919,6 +931,13 @@ html[data-notebook-theme="windows95"] .notebook-cell-status-skipped {
   font-family: "Courier New", monospace;
   font-size: 9px;
   font-weight: 700;
+}
+
+html[data-notebook-theme="windows95"] .notebook-cell-status-skipped-streaming {
+  border-color: #0c2c50 !important;
+  background: #153e69 !important;
+  color: #fff !important;
+  box-shadow: 1px 1px 0 #6d8fb4 inset, -1px -1px 0 #061a31 inset;
 }
 
 html[data-notebook-theme="windows95"] .notebook-cell-toggle-note {

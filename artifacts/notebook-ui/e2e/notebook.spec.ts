@@ -109,7 +109,9 @@ test("switches notebook styles and restores the selected style after reload", as
   await expect.poll(() => notebookCell.evaluate(element => getComputedStyle(element).clipPath))
     .toContain("4px");
   await expect.poll(() => notebookCell.evaluate(element => getComputedStyle(element).boxShadow))
-    .toContain("inset");
+    .toContain("2px 2px 0px");
+  await expect.poll(() => notebookCell.evaluate(element => getComputedStyle(element).boxShadow))
+    .toContain("-2px -2px 0px");
   await expect.poll(() => codeSource.evaluate(element => getComputedStyle(element).backgroundColor))
     .toBe("rgb(244, 244, 244)");
   await expect.poll(() => codeSource.evaluate(element => getComputedStyle(element).color))
@@ -216,6 +218,11 @@ test("adds consented AI explanations to notebook cells without changing the expo
     notebookContext: string;
     modelId: string;
   }> = [];
+  const multilineExplanation = [
+    "ИИ-пояснение: цель и первый шаг обработки.",
+    "",
+    `Маркербезпробелов${"оченьдлинный".repeat(12)}`,
+  ].join("\n");
   await page.route("**/api/ai/explain-notebook-cells", async (route) => {
     const request = route.request().postDataJSON() as {
       providerId: string;
@@ -234,10 +241,10 @@ test("adds consented AI explanations to notebook cells without changing the expo
         modelId: request.modelId,
         explanations: request.targetCellIndex === undefined
           ? [
-            { cellIndex: 0, explanation: "ИИ-пояснение: цель и первый шаг обработки." },
+            { cellIndex: 0, explanation: multilineExplanation },
             { cellIndex: 1, explanation: "ИИ поясняет доступные параметры ноутбука." },
           ]
-          : [{ cellIndex: request.targetCellIndex, explanation: "ИИ-пояснение: цель и первый шаг обработки." }],
+          : [{ cellIndex: request.targetCellIndex, explanation: multilineExplanation }],
       },
     });
   });
@@ -258,6 +265,13 @@ test("adds consented AI explanations to notebook cells without changing the expo
 
   await expect(page.getByTestId("text-cell-explanation-0"))
     .toContainText("ИИ-пояснение: цель и первый шаг обработки.");
+  const explanation = page.getByTestId("text-cell-explanation-0");
+  await expect(explanation).toHaveCSS("white-space", "pre-wrap");
+  await expect(explanation).toHaveCSS("overflow-wrap", "anywhere");
+  expect(await explanation.evaluate(element => element.textContent))
+    .toContain("\n\nМаркербезпробелов");
+  expect(await explanation.evaluate(element => element.scrollWidth <= element.clientWidth))
+    .toBe(true);
   await expect(page.getByTestId("text-ai-cell-explanation-source-0"))
     .toContainText(submittedRequests[0]?.modelId ?? "");
   expect(submittedRequests).toHaveLength(1);
@@ -707,6 +721,37 @@ test("simulates enabled cells without requiring Colab or sending code", async ({
   await expect(page.getByTestId("badge-saved-output-saved-result"))
     .toContainText("Сохранённый результат из исходного .ipynb");
   expect(executionRequests).toEqual([]);
+});
+
+test("highlights disabled cells in dark blue while a batch run is active", async ({ page }) => {
+  const cells = Array.from({ length: 10 }, (_, index) => ({
+    cell_type: "code",
+    id: `active-${index}`,
+    source: `print(${index})`,
+  }));
+  cells.push({
+    cell_type: "code",
+    id: "skipped",
+    source: 'print("skip")',
+  });
+  const file = notebookFile(
+    "skipped-cell-in-stream.ipynb",
+    JSON.stringify({ cells, nbformat: 4, nbformat_minor: 5 }),
+  );
+
+  await page.getByTestId("input-upload-notebook").setInputFiles(file);
+  const skippedStatus = page.getByTestId("status-cell-skipped-10");
+  await page.getByTestId("switch-cell-enabled-10").click();
+  await expect(skippedStatus).toHaveText("Отключена");
+
+  await page.getByTestId("button-run-enabled-cells").click();
+  await expect(skippedStatus).toHaveText("Пропускается в потоке");
+  await expect(skippedStatus).toHaveCSS("background-color", "rgb(21, 62, 105)");
+  await expect(skippedStatus).toHaveCSS("color", "rgb(255, 255, 255)");
+
+  await expect(page.getByTestId("status-batch-run"))
+    .toContainText("Симуляция завершена: просмотрено 10 из 10");
+  await expect(skippedStatus).toHaveText("Отключена");
 });
 
 test("simulation does not claim to catch runtime errors or fabricate outputs", async ({ page }) => {
