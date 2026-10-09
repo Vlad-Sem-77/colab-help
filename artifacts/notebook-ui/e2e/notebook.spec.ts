@@ -511,6 +511,33 @@ test("clears the previous notebook state after a successful replacement", async 
   await expect(page.getByTestId("input-assistant-question")).toHaveValue("");
 });
 
+test("displays line-array code source as separate wrapped lines", async ({ page }) => {
+  const source = ["print('first')", "print('second')", "print('third')"];
+  const file = notebookFile(
+    "multiline-code.ipynb",
+    JSON.stringify({
+      cells: [
+        {
+          cell_type: "code",
+          id: "multiline-code",
+          source,
+          outputs: [],
+        },
+      ],
+      nbformat: 4,
+      nbformat_minor: 5,
+    }),
+  );
+
+  await page.getByTestId("input-upload-notebook").setInputFiles(file);
+
+  const code = page.locator(".notebook-code-source").first();
+  await expect(code).toBeVisible();
+  await expect(code).toHaveCSS("white-space", "pre-wrap");
+  await expect.poll(() => code.evaluate((element) => element.textContent))
+    .toBe(source.join("\n"));
+});
+
 test("explains why malformed notebook files cannot be opened", async ({ page }) => {
   const notifications = page.getByRole("region", { name: "Notifications (F8)" });
   const malformedFiles = [

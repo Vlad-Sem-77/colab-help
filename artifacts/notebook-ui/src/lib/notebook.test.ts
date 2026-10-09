@@ -11,6 +11,7 @@ import {
   explainImportedLibraries,
   explainNotebookCell,
   exportNotebook,
+  getNotebookCellSourceForDisplay,
   getRunnableNotebookCells,
   isCellEnabled,
   parseNotebook,
@@ -59,6 +60,29 @@ test("round-trips a standard notebook without dropping its metadata or saved out
   const exported = JSON.parse(exportNotebook(parseNotebook(original), {}));
 
   assert.deepEqual(exported, original);
+});
+
+test("renders source-array entries on separate lines without changing the exported notebook", () => {
+  const original = {
+    cells: [
+      {
+        cell_type: "code",
+        id: "multiline-code",
+        source: ["print('first')", "print('second')"],
+        outputs: [],
+      },
+    ],
+    metadata: {},
+    nbformat: 4,
+    nbformat_minor: 5,
+  };
+  const notebook = parseNotebook(original);
+
+  assert.equal(
+    getNotebookCellSourceForDisplay(notebook.cells[0].source),
+    "print('first')\nprint('second')",
+  );
+  assert.deepEqual(JSON.parse(exportNotebook(notebook, {})), original);
 });
 
 test("round-trips the repository's Colab notebook metadata, cell IDs, counts, and outputs", () => {

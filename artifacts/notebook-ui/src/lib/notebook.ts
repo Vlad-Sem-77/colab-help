@@ -208,6 +208,22 @@ export function parseNotebook(json: any): Notebook {
 function cellSource(cell: NotebookCell): string {
   return cell.source.join("");
 }
+
+export function getNotebookCellSourceForDisplay(source: readonly string[]): string {
+  return source.reduce((result, line, index) => {
+    if (index === 0) return line;
+
+    const previousLine = source[index - 1] ?? "";
+    const hasLineBreak =
+      previousLine.endsWith("\n") ||
+      previousLine.endsWith("\r") ||
+      line.startsWith("\n") ||
+      line.startsWith("\r");
+
+    return `${result}${hasLineBreak ? "" : "\n"}${line}`;
+  }, "");
+}
+
 function detectParams(sourceLines: string[]): ParamInfo[] {
   const params: ParamInfo[] = [];
   

@@ -37,6 +37,7 @@ import {
   explainImportedLibraries,
   explainNotebookCell,
   getRunnableNotebookCells,
+  getNotebookCellSourceForDisplay,
   isCellEnabled,
   parseNotebook,
   exportNotebook,
@@ -1042,8 +1043,8 @@ export default function Home() {
                           )}
 
                           {cell.type === 'code' && (
-                            <pre className="notebook-code-source text-sm font-mono p-4 rounded bg-muted/50 overflow-x-auto text-blue-100">
-                              {cell.source.join("")}
+                            <pre className="notebook-code-source text-sm font-mono p-4 rounded bg-muted/50 overflow-x-auto whitespace-pre-wrap break-words text-blue-100">
+                              {getNotebookCellSourceForDisplay(cell.source)}
                             </pre>
                           )}
 
@@ -1060,8 +1061,8 @@ export default function Home() {
                                   />
                                 ))}
                               </div>
-                              <div className="notebook-parameter-source bg-muted/50 rounded p-4 font-mono text-xs overflow-x-auto text-orange-100">
-                                {cell.source.join("")}
+                              <div className="notebook-parameter-source bg-muted/50 rounded p-4 font-mono text-xs overflow-x-auto whitespace-pre-wrap break-words text-orange-100">
+                                {getNotebookCellSourceForDisplay(cell.source)}
                               </div>
                             </div>
                           )}
