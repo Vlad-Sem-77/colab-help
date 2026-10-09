@@ -150,6 +150,19 @@ test("uses the selected notebook theme for provider dropdowns", async ({ page })
     .toBe("rgb(222, 222, 222)");
 });
 
+test("shows distinct enabled and disabled cell switch colors in Windows 95", async ({ page }) => {
+  await page.getByTestId("input-upload-notebook").setInputFiles(notebookFixture);
+  await page.getByTestId("button-theme-windows95").click();
+
+  const cellSwitch = page.getByTestId("switch-cell-enabled-1");
+  await expect(cellSwitch).toHaveAttribute("data-state", "checked");
+  await expect(cellSwitch).toHaveCSS("background-color", "rgb(21, 62, 105)");
+
+  await cellSwitch.click();
+  await expect(cellSwitch).toHaveAttribute("data-state", "unchecked");
+  await expect(cellSwitch).toHaveCSS("background-color", "rgb(198, 198, 198)");
+});
+
 test("shows a short AI Tunnel list and model choices for other providers", async ({ page }) => {
   await page.getByTestId("input-upload-notebook").setInputFiles(notebookFixture);
 
@@ -721,37 +734,6 @@ test("simulates enabled cells without requiring Colab or sending code", async ({
   await expect(page.getByTestId("badge-saved-output-saved-result"))
     .toContainText("Сохранённый результат из исходного .ipynb");
   expect(executionRequests).toEqual([]);
-});
-
-test("highlights disabled cells in dark blue while a batch run is active", async ({ page }) => {
-  const cells = Array.from({ length: 10 }, (_, index) => ({
-    cell_type: "code",
-    id: `active-${index}`,
-    source: `print(${index})`,
-  }));
-  cells.push({
-    cell_type: "code",
-    id: "skipped",
-    source: 'print("skip")',
-  });
-  const file = notebookFile(
-    "skipped-cell-in-stream.ipynb",
-    JSON.stringify({ cells, nbformat: 4, nbformat_minor: 5 }),
-  );
-
-  await page.getByTestId("input-upload-notebook").setInputFiles(file);
-  const skippedStatus = page.getByTestId("status-cell-skipped-10");
-  await page.getByTestId("switch-cell-enabled-10").click();
-  await expect(skippedStatus).toHaveText("Отключена");
-
-  await page.getByTestId("button-run-enabled-cells").click();
-  await expect(skippedStatus).toHaveText("Пропускается в потоке");
-  await expect(skippedStatus).toHaveCSS("background-color", "rgb(21, 62, 105)");
-  await expect(skippedStatus).toHaveCSS("color", "rgb(255, 255, 255)");
-
-  await expect(page.getByTestId("status-batch-run"))
-    .toContainText("Симуляция завершена: просмотрено 10 из 10");
-  await expect(skippedStatus).toHaveText("Отключена");
 });
 
 test("simulation does not claim to catch runtime errors or fabricate outputs", async ({ page }) => {

@@ -573,12 +573,6 @@ html[data-notebook-theme="light-waves"] .notebook-cell-status-skipped {
   font-size: 10px;
 }
 
-html[data-notebook-theme="light-waves"] .notebook-cell-status-skipped-streaming {
-  border-color: #153e69 !important;
-  background: #153e69 !important;
-  color: #fff !important;
-}
-
 html[data-notebook-theme="light-waves"] .notebook-cell-toggle-note {
   margin: 6px 0 0;
   max-width: 650px;
@@ -802,6 +796,26 @@ html[data-notebook-theme="windows95"] .notebook-cell-header button {
   box-shadow: 1px 1px 0 #fff inset;
 }
 
+html[data-notebook-theme="windows95"] .notebook-cell-header [role="switch"] {
+  min-height: 0;
+  border: 1px solid #555;
+  border-radius: 0;
+  background-color: #c6c6c6 !important;
+  box-shadow: 1px 1px 0 #fff inset, -1px -1px 0 #858585 inset;
+}
+
+html[data-notebook-theme="windows95"] .notebook-cell-header [role="switch"][data-state="checked"] {
+  border-color: #0c2c50;
+  background-color: #153e69 !important;
+  box-shadow: 1px 1px 0 #6d8fb4 inset, -1px -1px 0 #061a31 inset;
+}
+
+html[data-notebook-theme="windows95"] .notebook-cell-header [role="switch"] > span {
+  border-radius: 0;
+  background: #f4f4f4;
+  box-shadow: 1px 1px 0 #fff inset, -1px -1px 0 #707070 inset;
+}
+
 html[data-notebook-theme="windows95"] .notebook-upload-footnote {
   margin: 13px 0 0;
   color: #666;
@@ -931,13 +945,6 @@ html[data-notebook-theme="windows95"] .notebook-cell-status-skipped {
   font-family: "Courier New", monospace;
   font-size: 9px;
   font-weight: 700;
-}
-
-html[data-notebook-theme="windows95"] .notebook-cell-status-skipped-streaming {
-  border-color: #0c2c50 !important;
-  background: #153e69 !important;
-  color: #fff !important;
-  box-shadow: 1px 1px 0 #6d8fb4 inset, -1px -1px 0 #061a31 inset;
 }
 
 html[data-notebook-theme="windows95"] .notebook-cell-toggle-note {

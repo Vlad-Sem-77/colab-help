@@ -85,7 +85,6 @@ function CellHeader({
   onToggle,
   runStatus,
   controlsDisabled,
-  isInRunStream,
 }: {
   index: number;
   type: string;
@@ -96,7 +95,6 @@ function CellHeader({
   onToggle: (enabled: boolean) => void;
   runStatus?: CellRunStatus;
   controlsDisabled?: boolean;
-  isInRunStream?: boolean;
 }) {
   const displayCount = executionCount === undefined ? index + 1 : executionCount ?? " ";
 
@@ -112,11 +110,11 @@ function CellHeader({
         {!isEnabled && (
           <Badge
             variant="outline"
-            className={`notebook-cell-status-skipped${isInRunStream ? " notebook-cell-status-skipped-streaming" : ""}`}
+            className="notebook-cell-status-skipped"
             data-testid={`status-cell-skipped-${index}`}
           >
             <SkipForward className="mr-1 h-3 w-3" aria-hidden="true" />
-            {isInRunStream ? "Пропускается в потоке" : "Отключена"}
+            Отключена
           </Badge>
         )}
         {runStatus === "running" && (
@@ -1033,7 +1031,6 @@ export default function Home() {
                           isRunning={runningCells[cell.id]}
                           runStatus={cellRunStatuses[cell.id]}
                           controlsDisabled={isBatchRunning}
-                          isInRunStream={isBatchRunning}
                           isEnabled={isCellEnabled(cellEnabled, cell.id)}
                           onToggle={(enabled) => updateCellEnabled(cell.id, enabled)}
                         />
