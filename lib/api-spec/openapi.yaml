@@ -53,6 +53,80 @@ paths:
         "400":
           description: Bad request
 
+  /colab/execution/ping:
+    post:
+      operationId: pingExecutionColab
+      tags: [colab]
+      summary: Check the execution-only Colab bridge
+      parameters:
+        - in: header
+          name: X-Colab-Bridge-Token
+          required: true
+          schema:
+            type: string
+            minLength: 32
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ColabUrlInput"
+      responses:
+        "200":
+          description: Connection status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ColabPingResult"
+        "400":
+          description: Invalid connection details
+
+  /colab/execution/notebook:
+    get:
+      operationId: downloadExecutionBridgeNotebook
+      tags: [colab]
+      summary: Download the Colab execution-only helper notebook
+      responses:
+        "200":
+          description: Colab helper notebook
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        "404":
+          description: Helper notebook not found
+
+  /colab/execution/run:
+    post:
+      operationId: executeNotebookCellInColab
+      tags: [colab]
+      summary: Execute one notebook cell in the connected Colab runtime
+      parameters:
+        - in: header
+          name: X-Colab-Bridge-Token
+          required: true
+          schema:
+            type: string
+            minLength: 32
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ColabCellExecutionInput"
+      responses:
+        "200":
+          description: Cell execution result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ColabCellExecutionResult"
+        "400":
+          description: Invalid request
+        "502":
+          description: Colab execution failed
+
   /colab/models:
     post:
       operationId: fetchFreeModels
@@ -421,6 +495,28 @@ components:
         colabUrl:
           type: string
           description: ngrok URL of the Colab Flask server
+    ColabCellExecutionInput:
+      type: object
+      required: [colabUrl, code]
+      properties:
+        colabUrl:
+          type: string
+          minLength: 1
+          maxLength: 2048
+        code:
+          type: string
+          maxLength: 1000000
+    ColabCellExecutionResult:
+      type: object
+      required: [status, stdout, stderr]
+      properties:
+        status:
+          type: string
+          enum: [ok, error]
+        stdout:
+          type: string
+        stderr:
+          type: string
 
     ColabPingResult:
       type: object

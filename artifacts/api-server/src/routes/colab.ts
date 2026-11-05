@@ -5,6 +5,12 @@ import path from "path";
 import { db, historyTable } from "@workspace/db";
 import {
   AnalyzeNotebookBody,
+  ExecuteNotebookCellInColabBody,
+  ExecuteNotebookCellInColabHeader,
+  ExecuteNotebookCellInColabResponse,
+  PingExecutionColabBody,
+  PingExecutionColabHeader,
+  PingExecutionColabResponse,
   PingColabBody,
   FetchFreeModelsBody,
   RunExperimentBody,
@@ -49,6 +55,78 @@ router.get("/colab/notebook", (_req, res): void => {
   res.setHeader("Content-Disposition", 'attachment; filename="colab_backend.ipynb"');
   res.setHeader("Content-Type", "application/json");
   res.sendFile(notebookPath);
+});
+
+router.get("/colab/execution/notebook", (_req, res): void => {
+  const notebookPath = path.resolve(process.cwd(), "..", "..", "colab_execution_bridge.ipynb");
+  if (!fs.existsSync(notebookPath)) {
+    res.status(404).json({ error: "Execution bridge notebook file not found" });
+    return;
+  }
+  res.setHeader("Content-Disposition", 'attachment; filename="colab_execution_bridge.ipynb"');
+  res.setHeader("Content-Type", "application/json");
+  res.sendFile(notebookPath);
+});
+
+router.post("/colab/execution/ping", async (req, res): Promise<void> => {
+  const body = PingExecutionColabBody.safeParse(req.body);
+  const headers = PingExecutionColabHeader.safeParse({
+    "X-Colab-Bridge-Token": req.get("X-Colab-Bridge-Token") ?? "",
+  });
+  if (!body.success || !headers.success || !isAllowedColabUrl(body.data.colabUrl)) {
+    res.status(400).json({ online: false, message: "Введите HTTPS-адрес Colab-туннеля и токен подключения." });
+    return;
+  }
+
+  try {
+    const response = await fetch(new URL("/health", body.data.colabUrl).toString(), {
+      headers: { "X-Colab-Bridge-Token": headers.data["X-Colab-Bridge-Token"] },
+      signal: AbortSignal.timeout(6000),
+      redirect: "error",
+    });
+    res.json(PingExecutionColabResponse.parse({
+      online: response.ok,
+      message: response.ok ? "Colab подключён" : "Colab не подтвердил подключение",
+    }));
+  } catch {
+    res.json({ online: false, message: "Не удалось связаться с Colab. Проверьте интернет и адрес туннеля." });
+  }
+});
+
+router.post("/colab/execution/run", async (req, res): Promise<void> => {
+  const body = ExecuteNotebookCellInColabBody.safeParse(req.body);
+  const headers = ExecuteNotebookCellInColabHeader.safeParse({
+    "X-Colab-Bridge-Token": req.get("X-Colab-Bridge-Token") ?? "",
+  });
+  if (!body.success || !headers.success || !isAllowedColabUrl(body.data.colabUrl)) {
+    res.status(400).json({ error: "Неверный адрес Colab или токен подключения." });
+    return;
+  }
+
+  try {
+    const response = await fetch(new URL("/execute", body.data.colabUrl).toString(), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Colab-Bridge-Token": headers.data["X-Colab-Bridge-Token"],
+      },
+      body: JSON.stringify({ code: body.data.code }),
+      signal: AbortSignal.timeout(120000),
+      redirect: "error",
+    });
+    if (!response.ok) {
+      res.status(502).json({ error: `Colab вернул HTTP ${response.status}.` });
+      return;
+    }
+    const result = ExecuteNotebookCellInColabResponse.safeParse(await response.json());
+    if (!result.success) {
+      res.status(502).json({ error: "Colab вернул ответ неизвестного формата." });
+      return;
+    }
+    res.json(result.data);
+  } catch {
+    res.status(502).json({ error: "Не удалось выполнить ячейку в Colab. Проверьте соединение." });
+  }
 });
 
 router.post("/colab/execute", async (req, res): Promise<void> => {

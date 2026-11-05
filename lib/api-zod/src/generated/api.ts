@@ -32,6 +32,62 @@ export const PingColabResponse = zod.object({
 
 
 /**
+ * @summary Check the execution-only Colab bridge
+ */
+export const pingExecutionColabHeaderXColabBridgeTokenMin = 32;
+
+
+
+export const PingExecutionColabHeader = zod.object({
+  "X-Colab-Bridge-Token": zod.string().min(pingExecutionColabHeaderXColabBridgeTokenMin)
+})
+
+export const PingExecutionColabBody = zod.object({
+  "colabUrl": zod.string().describe('ngrok URL of the Colab Flask server')
+})
+
+export const PingExecutionColabResponse = zod.object({
+  "online": zod.boolean(),
+  "message": zod.string()
+})
+
+
+/**
+ * @summary Download the Colab execution-only helper notebook
+ */
+export const DownloadExecutionBridgeNotebookResponse = zod.record(zod.string(), zod.unknown())
+
+
+/**
+ * @summary Execute one notebook cell in the connected Colab runtime
+ */
+export const executeNotebookCellInColabHeaderXColabBridgeTokenMin = 32;
+
+
+
+export const ExecuteNotebookCellInColabHeader = zod.object({
+  "X-Colab-Bridge-Token": zod.string().min(executeNotebookCellInColabHeaderXColabBridgeTokenMin)
+})
+
+export const executeNotebookCellInColabBodyColabUrlMax = 2048;
+
+export const executeNotebookCellInColabBodyCodeMax = 1000000;
+
+
+
+export const ExecuteNotebookCellInColabBody = zod.object({
+  "colabUrl": zod.string().min(1).max(executeNotebookCellInColabBodyColabUrlMax),
+  "code": zod.string().max(executeNotebookCellInColabBodyCodeMax)
+})
+
+export const ExecuteNotebookCellInColabResponse = zod.object({
+  "status": zod.enum(['ok', 'error']),
+  "stdout": zod.string(),
+  "stderr": zod.string()
+})
+
+
+/**
  * Asks the Colab server to fetch free models from OpenRouter
  * @summary Fetch list of free models from Colab
  */

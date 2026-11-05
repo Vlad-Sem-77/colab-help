@@ -36,8 +36,11 @@ import type {
   AiProvidersResult,
   AiVoiceSpeechInput,
   AiVoiceTranscriptionResult,
+  ColabCellExecutionInput,
+  ColabCellExecutionResult,
   ColabPingResult,
   ColabUrlInput,
+  DownloadExecutionBridgeNotebook200,
   ExperimentInput,
   ExperimentResult,
   FreeModelsResult,
@@ -265,6 +268,283 @@ export const usePingColab = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getPingColabMutationOptions(options), queryClient);
+    }
+
+export const getPingExecutionColabUrl = () => {
+
+
+
+
+  return `/api/colab/execution/ping`
+}
+
+/**
+ * @summary Check the execution-only Colab bridge
+ */
+export const pingExecutionColab = async (colabUrlInput: ColabUrlInput, options?: Parameters<typeof customFetch>[1]): Promise<ColabPingResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ColabPingResult>(getPingExecutionColabUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(colabUrlInput)
+  }
+);}
+
+
+
+
+
+export const getPingExecutionColabMutationKey = () => ['pingExecutionColab'] as const;
+
+export const getPingExecutionColabMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pingExecutionColab>>, TError,PingExecutionColabMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof pingExecutionColab>>, TError,PingExecutionColabMutationVariables, TContext> => {
+
+const mutationKey = getPingExecutionColabMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof pingExecutionColab>>, PingExecutionColabMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  pingExecutionColab(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PingExecutionColabMutationResult = NonNullable<Awaited<ReturnType<typeof pingExecutionColab>>>
+    export type PingExecutionColabMutationBody = BodyType<ColabUrlInput>
+    export type PingExecutionColabMutationError = ErrorType<void>
+    export type PingExecutionColabMutationVariables = {data: BodyType<ColabUrlInput>}
+
+    /**
+ * @summary Check the execution-only Colab bridge
+ */
+export const usePingExecutionColab = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pingExecutionColab>>, TError,PingExecutionColabMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof pingExecutionColab>>,
+        TError,
+        PingExecutionColabMutationVariables,
+        TContext
+      > => {
+      return useMutation(getPingExecutionColabMutationOptions(options), queryClient);
+    }
+
+export const getDownloadExecutionBridgeNotebookUrl = () => {
+
+
+
+
+  return `/api/colab/execution/notebook`
+}
+
+/**
+ * @summary Download the Colab execution-only helper notebook
+ */
+export const downloadExecutionBridgeNotebook = async ( options?: Parameters<typeof customFetch>[1]): Promise<DownloadExecutionBridgeNotebook200> => {
+
+  return customFetch<DownloadExecutionBridgeNotebook200>(getDownloadExecutionBridgeNotebookUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getDownloadExecutionBridgeNotebookQueryKey = () => {
+    return [
+    `/api/colab/execution/notebook`
+    ] as const;
+    }
+
+
+export const getDownloadExecutionBridgeNotebookQueryOptions = <TData = Awaited<ReturnType<typeof downloadExecutionBridgeNotebook>>, TError = ErrorType<void>>( options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadExecutionBridgeNotebook>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getDownloadExecutionBridgeNotebookQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof downloadExecutionBridgeNotebook>>> = ({ signal }) => downloadExecutionBridgeNotebook({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof downloadExecutionBridgeNotebook>>, TError, TData> & { queryKey: DataTag<QueryKey, TData, TError> }
+}
+
+export type DownloadExecutionBridgeNotebookQueryResult = NonNullable<Awaited<ReturnType<typeof downloadExecutionBridgeNotebook>>>
+export type DownloadExecutionBridgeNotebookQueryError = ErrorType<void>
+
+
+export function useDownloadExecutionBridgeNotebook<TData = Awaited<ReturnType<typeof downloadExecutionBridgeNotebook>>, TError = ErrorType<void>>(
+  options: { query:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadExecutionBridgeNotebook>>, TError, TData>> & Pick<
+        DefinedInitialDataOptions<
+          Awaited<ReturnType<typeof downloadExecutionBridgeNotebook>>,
+          TError,
+          Awaited<ReturnType<typeof downloadExecutionBridgeNotebook>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  DefinedUseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useDownloadExecutionBridgeNotebook<TData = Awaited<ReturnType<typeof downloadExecutionBridgeNotebook>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadExecutionBridgeNotebook>>, TError, TData>> & Pick<
+        UndefinedInitialDataOptions<
+          Awaited<ReturnType<typeof downloadExecutionBridgeNotebook>>,
+          TError,
+          Awaited<ReturnType<typeof downloadExecutionBridgeNotebook>>
+        > , 'initialData'
+      >, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+export function useDownloadExecutionBridgeNotebook<TData = Awaited<ReturnType<typeof downloadExecutionBridgeNotebook>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadExecutionBridgeNotebook>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+  ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> }
+/**
+ * @summary Download the Colab execution-only helper notebook
+ */
+
+export function useDownloadExecutionBridgeNotebook<TData = Awaited<ReturnType<typeof downloadExecutionBridgeNotebook>>, TError = ErrorType<void>>(
+  options?: { query?:Partial<UseQueryOptions<Awaited<ReturnType<typeof downloadExecutionBridgeNotebook>>, TError, TData>>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient
+ ):  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> } {
+
+  const queryOptions = getDownloadExecutionBridgeNotebookQueryOptions(options)
+
+  const query = useQuery(queryOptions, queryClient) as  UseQueryResult<TData, TError> & { queryKey: DataTag<QueryKey, TData, TError> };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getExecuteNotebookCellInColabUrl = () => {
+
+
+
+
+  return `/api/colab/execution/run`
+}
+
+/**
+ * @summary Execute one notebook cell in the connected Colab runtime
+ */
+export const executeNotebookCellInColab = async (colabCellExecutionInput: ColabCellExecutionInput, options?: Parameters<typeof customFetch>[1]): Promise<ColabCellExecutionResult> => {
+
+    const getHeaders = (h?: NonNullable<RequestInit['headers']>): Record<string, string | readonly string[]> => {
+    if (!h) return {};
+    if (h instanceof Headers) return Object.fromEntries(h.entries());
+    if (Symbol.iterator in h) {
+      return Object.fromEntries(
+        Array.from(h as Iterable<Iterable<string>>, (entry) => Array.from(entry) as [string, string]),
+      );
+    }
+    const headers: Record<string, string | readonly string[]> = {};
+    for (const [name, value] of Object.entries<string | readonly string[] | undefined>(h)) {
+      if (value !== undefined) headers[name] = value;
+    }
+    return headers;
+  };
+return customFetch<ColabCellExecutionResult>(getExecuteNotebookCellInColabUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getHeaders(options?.headers) },
+    body: JSON.stringify(colabCellExecutionInput)
+  }
+);}
+
+
+
+
+
+export const getExecuteNotebookCellInColabMutationKey = () => ['executeNotebookCellInColab'] as const;
+
+export const getExecuteNotebookCellInColabMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof executeNotebookCellInColab>>, TError,ExecuteNotebookCellInColabMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof executeNotebookCellInColab>>, TError,ExecuteNotebookCellInColabMutationVariables, TContext> => {
+
+const mutationKey = getExecuteNotebookCellInColabMutationKey();
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof executeNotebookCellInColab>>, ExecuteNotebookCellInColabMutationVariables> = (props) => {
+          const {data} = props ?? {};
+
+          return  executeNotebookCellInColab(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ExecuteNotebookCellInColabMutationResult = NonNullable<Awaited<ReturnType<typeof executeNotebookCellInColab>>>
+    export type ExecuteNotebookCellInColabMutationBody = BodyType<ColabCellExecutionInput>
+    export type ExecuteNotebookCellInColabMutationError = ErrorType<void>
+    export type ExecuteNotebookCellInColabMutationVariables = {data: BodyType<ColabCellExecutionInput>}
+
+    /**
+ * @summary Execute one notebook cell in the connected Colab runtime
+ */
+export const useExecuteNotebookCellInColab = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof executeNotebookCellInColab>>, TError,ExecuteNotebookCellInColabMutationVariables, TContext>, request?: SecondParameter<typeof customFetch>}
+ , queryClient?: QueryClient): UseMutationResult<
+        Awaited<ReturnType<typeof executeNotebookCellInColab>>,
+        TError,
+        ExecuteNotebookCellInColabMutationVariables,
+        TContext
+      > => {
+      return useMutation(getExecuteNotebookCellInColabMutationOptions(options), queryClient);
     }
 
 export const getFetchFreeModelsUrl = () => {

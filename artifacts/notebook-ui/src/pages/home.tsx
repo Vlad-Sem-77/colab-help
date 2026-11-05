@@ -50,7 +50,7 @@ import { NotebookReader } from "@/components/notebook-reader";
 import { useNotebookTheme } from "@/components/layout";
 import { useNotebookSession } from "@/components/notebook-session";
 
-type CellRunStatus = "running" | "simulated";
+type CellRunStatus = "running" | "simulated" | "executed";
 type AiCellExplanation = { explanation: string; modelId: string };
 type BatchRunState =
   | { status: "running"; currentCellId: string; cellNumber: number; position: number; total: number }
@@ -128,6 +128,12 @@ function CellHeader({
           <Badge variant="secondary" data-testid={`status-cell-simulated-${index}`}>
             <CheckCircle2 className="mr-1 h-3 w-3" aria-hidden="true" />
             Пройдена в симуляции
+          </Badge>
+        )}
+        {runStatus === "executed" && (
+          <Badge variant="secondary" data-testid={`status-cell-executed-${index}`}>
+            <CheckCircle2 className="mr-1 h-3 w-3" aria-hidden="true" />
+            Выполнена в Colab
           </Badge>
         )}
       </div>
@@ -370,6 +376,7 @@ export default function Home() {
   const [notebookSettingsId, setNotebookSettingsId] = useState<string | null>(null);
   const [rememberCellSettings, setRememberCellSettings] = useState(false);
   const [cellResults, setCellResults] = useState<Record<string, any>>({});
+  const [cellResultSources, setCellResultSources] = useState<Record<string, "colab">>({});
   const [runningCells, setRunningCells] = useState<Record<string, boolean>>({});
   const [cellRunStatuses, setCellRunStatuses] = useState<Record<string, CellRunStatus>>({});
   const [isBatchRunning, setIsBatchRunning] = useState(false);
@@ -377,6 +384,15 @@ export default function Home() {
   const [notebookRevision, setNotebookRevision] = useState(0);
   const [aiSettings, setAiSettings] = useState<AiSettings>(readSavedAiSettings);
   const [allowOnlineAi, setAllowOnlineAi] = useState(false);
+  const [isOnline, setIsOnline] = useState(() => typeof navigator === "undefined" || navigator.onLine);
+  const [colabUrl, setColabUrl] = useState("");
+  const [colabToken, setColabToken] = useState("");
+  const [colabConnected, setColabConnected] = useState(false);
+  const [colabStatusMessage, setColabStatusMessage] = useState("");
+  const [isCheckingColab, setIsCheckingColab] = useState(false);
+  const [isExecutingInColab, setIsExecutingInColab] = useState(false);
+  const [allowColabExecution, setAllowColabExecution] = useState(false);
+  const [colabRunMessage, setColabRunMessage] = useState("");
   const [aiCellExplanations, setAiCellExplanations] = useState<Record<number, AiCellExplanation>>({});
   const [aiCellExplanationModel, setAiCellExplanationModel] = useState("");
   const [aiCellExplanationStatus, setAiCellExplanationStatus] = useState<{
@@ -417,8 +433,24 @@ export default function Home() {
   const activeAiModelId = getActiveAiModelId(aiSettings);
   const aiModelIsAvailable = selectableAiModels.some((model) => model.id === activeAiModelId);
   const aiReady = Boolean(selectedAiProvider?.hasSessionKey && activeAiModelId && aiModelIsAvailable);
+  const onlineAiReady = aiReady && isOnline;
 
   const { toast } = useToast();
+  useEffect(() => {
+    const updateOnline = () => {
+      setIsOnline(navigator.onLine);
+      if (!navigator.onLine) {
+        setColabConnected(false);
+        setColabStatusMessage("Нет интернет-соединения. Доступны чтение и симуляция.");
+      }
+    };
+    window.addEventListener("online", updateOnline);
+    window.addEventListener("offline", updateOnline);
+    return () => {
+      window.removeEventListener("online", updateOnline);
+      window.removeEventListener("offline", updateOnline);
+    };
+  }, []);
   useEffect(() => {
     if (!restoreError) return;
     toast({
@@ -575,6 +607,7 @@ export default function Home() {
         setExplainingCellIndex(null);
         setCellValues({});
         setCellResults({});
+        setCellResultSources({});
         setCellRunStatuses({});
         setBatchRunState(null);
         if (!savedLocally) {
@@ -741,6 +774,78 @@ export default function Home() {
     }
   };
 
+  const handleCheckColab = async () => {
+    setIsCheckingColab(true);
+    setColabConnected(false);
+    setColabStatusMessage("");
+    try {
+      const response = await fetch("/api/colab/execution/ping", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Colab-Bridge-Token": colabToken,
+        },
+        body: JSON.stringify({ colabUrl }),
+      });
+      const result = await response.json() as { online?: boolean; message?: string };
+      setColabConnected(response.ok && Boolean(result.online));
+      setColabStatusMessage(result.message ?? "Colab не подтвердил подключение.");
+    } catch {
+      setColabStatusMessage("Нет связи с Colab. Проверьте интернет, адрес и токен.");
+    } finally {
+      setIsCheckingColab(false);
+    }
+  };
+
+  const handleRunEnabledCellsInColab = async () => {
+    if (!notebook || !isOnline || !colabConnected || !allowColabExecution || isExecutingInColab) return;
+    const cellsToRun = getRunnableNotebookCells(notebook.cells, cellEnabled);
+    if (cellsToRun.length === 0) {
+      setColabRunMessage("Нет включённых ячеек для запуска.");
+      return;
+    }
+
+    setIsExecutingInColab(true);
+    setColabRunMessage("");
+    setCellResults({});
+    setCellResultSources({});
+    setCellRunStatuses({});
+    try {
+      for (const cell of cellsToRun) {
+        const source = getNotebookCellSourceForDisplay(cell.source);
+        const overrides = cell.type === "parameter"
+          ? Object.entries(cellValues[cell.id] ?? {})
+            .map(([name, value]) => `${name} = ${JSON.stringify(value)}`)
+            .join("\n")
+          : "";
+        const response = await fetch("/api/colab/execution/run", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "X-Colab-Bridge-Token": colabToken,
+          },
+          body: JSON.stringify({ colabUrl, code: [source, overrides].filter(Boolean).join("\n") }),
+        });
+        const result = await response.json() as { status?: string; stdout?: string; stderr?: string; error?: string };
+        if (!response.ok) throw new Error(result.error ?? `Ошибка связи с Colab (HTTP ${response.status}).`);
+        const output = [result.stdout, result.stderr].filter(Boolean).join("\n");
+        setCellResults(previous => ({ ...previous, [cell.id]: output || "Выполнено без текстового вывода." }));
+        setCellResultSources(previous => ({ ...previous, [cell.id]: "colab" }));
+        if (result.status !== "ok") {
+          setColabRunMessage(`Выполнение остановлено на ячейке ${notebook.cells.indexOf(cell) + 1}: ${result.stderr || "ошибка Python"}`);
+          return;
+        }
+        setCellRunStatuses(previous => ({ ...previous, [cell.id]: "executed" }));
+      }
+      setColabRunMessage(`Colab выполнил ${cellsToRun.length} ячеек.`);
+    } catch (error) {
+      setColabRunMessage(error instanceof Error ? error.message : "Не удалось выполнить ячейки в Colab.");
+      setColabConnected(false);
+    } finally {
+      setIsExecutingInColab(false);
+    }
+  };
+
   const handleDownload = () => {
     if (!notebook) return;
     const jsonStr = exportNotebook(notebook, cellValues);
@@ -754,7 +859,7 @@ export default function Home() {
   };
 
   const handleExplainEntireNotebook = async () => {
-    if (!notebook || !aiReady || !allowOnlineAi || !notebookContext.trim() || isExplainingNotebook || explainingCellIndex !== null) return;
+    if (!notebook || !onlineAiReady || !allowOnlineAi || !notebookContext.trim() || isExplainingNotebook || explainingCellIndex !== null) return;
 
     const requestId = ++cellExplanationRequestId.current;
     setAiCellExplanationError(null);
@@ -799,7 +904,7 @@ export default function Home() {
   const handleAskAiAboutCell = async (targetCellIndex: number) => {
     if (
       !notebook
-      || !aiReady
+      || !onlineAiReady
       || !allowOnlineAi
       || isExplainingNotebook
       || explainingCellIndex !== null
@@ -875,7 +980,7 @@ export default function Home() {
                 <div className="flex flex-wrap items-center gap-2">
                   <p className="notebook-eyebrow">РАБОЧАЯ ОБЛАСТЬ</p>
                   <span className="notebook-simulation-status" data-testid="status-simulation-mode">
-                    Симуляция · код не запускается
+                    Симуляция доступна без интернета
                   </span>
                 </div>
                 <h2>Блокнот готов</h2>
@@ -953,6 +1058,16 @@ export default function Home() {
                 )}
               </section>
             )}
+            {!isOnline && (
+              <section className="notebook-simulation-status" role="status" data-testid="status-offline-mode">
+                Нет интернета: доступны чтение и симуляция. ИИ-консультант и Google Colab требуют подключения.
+              </section>
+            )}
+            {colabRunMessage && (
+              <p role="status" className="text-sm text-muted-foreground" data-testid="status-colab-run">
+                {colabRunMessage}
+              </p>
+            )}
             {aiCellExplanationStatus && (
               <p className="text-sm text-muted-foreground" role="status" data-testid="status-ai-cell-explanations">
                 ИИ-модель {aiCellExplanationModel} пояснила {aiCellExplanationStatus.explained} из {aiCellExplanationStatus.total} ячеек.
@@ -979,6 +1094,78 @@ export default function Home() {
               onClearApiKey={disconnectProviderKey}
               onChange={handleAiSettingsChange}
             />
+            <section className="rounded-lg border bg-card p-4" data-testid="panel-colab-connection">
+              <h3 className="font-semibold">Google Colab</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Скачайте вспомогательный блокнот, откройте его в Colab и запустите все ячейки. Затем вставьте сюда адрес туннеля и токен.
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button variant="outline" size="sm" asChild>
+                  <a href="/api/colab/execution/notebook" download="colab_execution_bridge.ipynb">
+                    Скачать блокнот-мост
+                  </a>
+                </Button>
+                <Input
+                  aria-label="Адрес Colab-туннеля"
+                  placeholder="https://….trycloudflare.com"
+                  value={colabUrl}
+                  onChange={event => {
+                    setColabUrl(event.target.value.trim());
+                    setColabConnected(false);
+                  }}
+                  disabled={!isOnline}
+                  data-testid="input-colab-url"
+                />
+                <Input
+                  aria-label="Токен Colab-моста"
+                  placeholder="Токен из Colab"
+                  type="password"
+                  value={colabToken}
+                  onChange={event => {
+                    setColabToken(event.target.value);
+                    setColabConnected(false);
+                  }}
+                  disabled={!isOnline}
+                  data-testid="input-colab-token"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => void handleCheckColab()}
+                  disabled={!isOnline || !colabUrl || colabToken.length < 32 || isCheckingColab}
+                  data-testid="button-check-colab"
+                >
+                  {isCheckingColab ? "Проверяю…" : "Проверить Colab"}
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleRunEnabledCellsInColab}
+                  disabled={!isOnline || !colabConnected || !allowColabExecution || isExecutingInColab || isBatchRunning}
+                  data-testid="button-run-enabled-cells-colab"
+                >
+                  {isExecutingInColab
+                    ? <Loader2 className="w-4 h-4 mr-2 animate-spin" aria-hidden="true" />
+                    : <Play className="w-4 h-4 mr-2" aria-hidden="true" />}
+                  Выполнить включённые ячейки в Colab
+                </Button>
+              </div>
+              <div className="mt-3 flex flex-wrap items-center gap-3">
+                <label className="flex items-center gap-2 text-sm">
+                  <Switch
+                    checked={allowColabExecution}
+                    onCheckedChange={setAllowColabExecution}
+                    disabled={!isOnline}
+                    data-testid="switch-allow-colab-execution"
+                  />
+                  Разрешаю выполнять код ноутбука в моей сессии Colab
+                </label>
+                {colabStatusMessage && (
+                  <span role="status" className="text-sm text-muted-foreground" data-testid="status-colab-connection">
+                    {colabStatusMessage}
+                  </span>
+                )}
+              </div>
+            </section>
             <NotebookReader
               key={notebookRevision}
               notebook={notebook}
@@ -986,7 +1173,7 @@ export default function Home() {
               providerId={aiSettings.providerId}
               modelId={activeAiModelId}
               profile={aiSettings.profile}
-              aiReady={aiReady}
+              aiReady={onlineAiReady}
               allowOnlineAi={allowOnlineAi}
               onAllowOnlineAiChange={setAllowOnlineAi}
             />
@@ -996,7 +1183,7 @@ export default function Home() {
                 variant="outline"
                 size="sm"
                 onClick={() => void handleExplainEntireNotebook()}
-                disabled={!aiReady || !allowOnlineAi || isExplainingNotebook || explainingCellIndex !== null || !notebookContext.trim()}
+                disabled={!onlineAiReady || !allowOnlineAi || isExplainingNotebook || explainingCellIndex !== null || !notebookContext.trim()}
                 data-testid="button-explain-entire-notebook"
               >
                 {isExplainingNotebook
@@ -1105,7 +1292,7 @@ export default function Home() {
                                 variant="outline"
                                 size="sm"
                                 onClick={() => void handleAskAiAboutCell(index)}
-                                disabled={!aiReady || !allowOnlineAi || isExplainingNotebook || explainingCellIndex !== null}
+                                disabled={!onlineAiReady || !allowOnlineAi || isExplainingNotebook || explainingCellIndex !== null}
                                 aria-label={`Спросить ИИ об этой ячейке ${index + 1}`}
                                 data-testid={`button-ask-ai-cell-${index}`}
                               >
@@ -1129,7 +1316,9 @@ export default function Home() {
 
                         {cellResults[cell.id] !== undefined ? (
                           <div className="notebook-cell-output border-t p-4" data-testid={`result-live-${cell.id}`}>
-                            <Badge variant="outline" className="mb-3">Результат этой сессии — симуляция его не обновляла</Badge>
+                            <Badge variant="outline" className="mb-3">
+                              {cellResultSources[cell.id] === "colab" ? "Результат выполнения в Google Colab" : "Результат этой сессии — симуляция его не обновляла"}
+                            </Badge>
                             <pre className="text-sm font-mono whitespace-pre-wrap">
                               {outputText(cellResults[cell.id])}
                             </pre>
@@ -1168,9 +1357,10 @@ export default function Home() {
               providerId={aiSettings.providerId}
               modelId={activeAiModelId}
               profile={aiSettings.profile}
-              voiceInputAvailable={Boolean(selectedAiProvider?.voiceInputAvailable)}
-              voiceOutputAvailable={Boolean(selectedAiProvider?.voiceOutputAvailable)}
+              voiceInputAvailable={isOnline && Boolean(selectedAiProvider?.voiceInputAvailable)}
+              voiceOutputAvailable={isOnline && Boolean(selectedAiProvider?.voiceOutputAvailable)}
               aiReady={aiReady}
+              isOnline={isOnline}
               allowOnlineAi={allowOnlineAi}
             />
           </div>

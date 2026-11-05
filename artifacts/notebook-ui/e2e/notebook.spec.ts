@@ -811,6 +811,49 @@ test("simulation does not claim to catch runtime errors or fabricate outputs", a
   expect(executionRequests).toEqual([]);
 });
 
+test("keeps notebook simulation usable when the network is unavailable", async ({ page, context }) => {
+  await page.getByTestId("input-upload-notebook").setInputFiles(notebookFixture);
+  await context.setOffline(true);
+  await expect(page.getByTestId("status-offline-mode")).toBeVisible();
+  await page.getByTestId("button-run-enabled-cells").click();
+  await expect(page.getByTestId("status-batch-run")).toContainText("Симуляция завершена");
+  await expect(page.getByTestId("status-ai-offline")).toBeVisible();
+  await expect(page.getByTestId("button-run-enabled-cells-colab")).toBeDisabled();
+});
+
+test("runs enabled cells only after the Colab bridge is verified and consented", async ({ page }) => {
+  const code = "print('hello from colab')";
+  await page.getByTestId("input-upload-notebook").setInputFiles({
+    name: "live-cell.ipynb",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify({
+      cells: [{ cell_type: "code", id: "live-cell", source: code }],
+      nbformat: 4,
+      nbformat_minor: 5,
+    })),
+  });
+
+  await page.route("**/api/colab/execution/ping", async route => {
+    expect(route.request().headers()["x-colab-bridge-token"]).toHaveLength(40);
+    await route.fulfill({ json: { online: true, message: "Colab подключён" } });
+  });
+  await page.route("**/api/colab/execution/run", async route => {
+    expect(route.request().postDataJSON().code).toBe(code);
+    await route.fulfill({ json: { status: "ok", stdout: "hello from colab", stderr: "" } });
+  });
+
+  await page.getByTestId("input-colab-url").fill("https://sample.trycloudflare.com");
+  await page.getByTestId("input-colab-token").fill("t".repeat(40));
+  await page.getByTestId("button-check-colab").click();
+  await expect(page.getByTestId("status-colab-connection")).toContainText("Colab подключён");
+  await expect(page.getByTestId("button-run-enabled-cells-colab")).toBeDisabled();
+  await page.getByTestId("switch-allow-colab-execution").click();
+  await page.getByTestId("button-run-enabled-cells-colab").click();
+  await expect(page.getByTestId("status-colab-run")).toContainText("Colab выполнил 1 ячеек");
+  await expect(page.getByTestId("result-live-live-cell")).toContainText("hello from colab");
+  await expect(page.getByTestId("status-cell-executed-0")).toBeVisible();
+});
+
 test("keeps the loaded notebook within a mobile viewport", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByTestId("input-upload-notebook").setInputFiles(notebookFixture);
@@ -820,7 +863,7 @@ test("keeps the loaded notebook within a mobile viewport", async ({ page }) => {
   )).toHaveCount(0);
   await expect(page.getByTestId("notice-simulation-mode")).toHaveCount(0);
   await expect(page.getByTestId("status-simulation-mode"))
-    .toHaveText("Симуляция · код не запускается");
+    .toHaveText("Симуляция доступна без интернета");
 
   const dimensions = await page.evaluate(() => {
     const main = document.querySelector("main");

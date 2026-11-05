@@ -14,6 +14,30 @@ export interface ColabUrlInput {
   colabUrl: string;
 }
 
+export interface ColabCellExecutionInput {
+  /**
+     * @minLength 1
+     * @maxLength 2048
+     */
+  colabUrl: string;
+  /** @maxLength 1000000 */
+  code: string;
+}
+
+export type ColabCellExecutionResultStatus = typeof ColabCellExecutionResultStatus[keyof typeof ColabCellExecutionResultStatus];
+
+
+export const ColabCellExecutionResultStatus = {
+  ok: 'ok',
+  error: 'error',
+} as const;
+
+export interface ColabCellExecutionResult {
+  status: ColabCellExecutionResultStatus;
+  stdout: string;
+  stderr: string;
+}
+
 export interface ColabPingResult {
   online: boolean;
   message: string;
@@ -339,6 +363,8 @@ export interface HistoryEntry {
   modelContextLength?: number | null;
   createdAt: string;
 }
+
+export type DownloadExecutionBridgeNotebook200 = { [key: string]: unknown };
 
 export type ListAiModelsParams = {
 providerId: AiProviderId;

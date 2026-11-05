@@ -17,6 +17,7 @@ type NotebookAssistantProps = {
   voiceInputAvailable: boolean;
   voiceOutputAvailable: boolean;
   aiReady: boolean;
+  isOnline: boolean;
   allowOnlineAi: boolean;
 };
 
@@ -72,6 +73,7 @@ export function NotebookAssistant({
   voiceInputAvailable,
   voiceOutputAvailable,
   aiReady,
+  isOnline,
   allowOnlineAi,
 }: NotebookAssistantProps) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -82,7 +84,7 @@ export function NotebookAssistant({
   const form = useForm<{ question: string }>({ defaultValues: { question: "" } });
   const question = form.watch("question") ?? "";
   const analyzeWithAi = useAnalyzeNotebookWithAi();
-  const canAsk = aiReady && allowOnlineAi && Boolean(modelId) && Boolean(notebookContext.trim()) && !isPending;
+  const canAsk = isOnline && aiReady && allowOnlineAi && Boolean(modelId) && Boolean(notebookContext.trim()) && !isPending;
 
   const addMessage = (message: Omit<Message, "id">) => {
     const id = nextMessageId.current++;
@@ -187,7 +189,17 @@ export function NotebookAssistant({
       </div>
 
       <div className="space-y-5 px-5 py-5 sm:px-6">
-        {!aiReady && (
+        {!isOnline && (
+          <div
+            className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+            role="status"
+            data-testid="status-ai-offline"
+          >
+            <CircleHelp className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" aria-hidden="true" />
+            <p>Нет интернет-соединения. Блокнот читается локально, а ИИ-учитель станет доступен после подключения.</p>
+          </div>
+        )}
+        {isOnline && !aiReady && (
           <div
             className="flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
             role="status"
