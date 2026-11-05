@@ -19,8 +19,8 @@ AI-generated cell explanations are opt-in annotations, requested per cell by def
 
 ## Product direction
 
-The user wants the AI teacher to remain online; installing a local AI model is too expensive and complicated. Actual Python execution on the user's device is a later phase.
+Keep offline notebook reading and simulated cell runs available as a learning mode when there is no network. When online, the intended experience also offers the AI teacher and actual execution through Google Colab. The current app still simulates runs and does not yet execute cells in Colab. Installing a local AI model is out of scope.
 
-**Why:** The user explicitly chose this phased direction and ruled out local model installation.
+**Why:** The user clarified that simulation is useful for learning offline, while AI explanations and real Colab execution require internet.
 
-**How to apply:** Keep explanation and execution as separate capabilities. Label simulated runs so they cannot be mistaken for real execution, and do not require a local AI model.
+**How to apply:** Preserve offline reading and simulation independently from online services. Clearly distinguish simulation from real Colab execution, and show AI/Colab as unavailable without internet rather than silently simulating them.
