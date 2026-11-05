@@ -162,7 +162,7 @@ export const RunExperimentResponse = zod.object({
 
 
 /**
- * Sends notebook text to the connected Colab model for analysis without executing notebook cells or adding the prompt to experiment history
+ * Sends notebook text to the connected Colab model for analysis without executing notebook cells
  * @summary Answer a question about an uploaded notebook
  */
 export const analyzeNotebookBodyColabUrlMax = 2048;
@@ -358,45 +358,5 @@ export const SynthesizeAiSpeechBody = zod.object({
 })
 
 export const SynthesizeAiSpeechResponse = zod.unknown()
-
-
-/**
- * Returns the list of recent experiments
- * @summary Get experiment history
- */
-export const ListHistoryResponseItem = zod.object({
-  "id": zod.number().int(),
-  "taskType": zod.string(),
-  "mode": zod.string(),
-  "model": zod.string().nullish(),
-  "prompt": zod.string().optional(),
-  "result": zod.string().nullish(),
-  "promptTokens": zod.number().int().nullish(),
-  "completionTokens": zod.number().int().nullish(),
-  "totalTokens": zod.number().int().nullish(),
-  "executionTime": zod.number().nullish(),
-  "modelName": zod.string().nullish(),
-  "modelProvider": zod.string().nullish(),
-  "modelContextLength": zod.number().int().nullish(),
-  "createdAt": zod.string()
-})
-export const ListHistoryResponse = zod.array(ListHistoryResponseItem)
-
-
-/**
- * Deletes all experiment history
- * @summary Clear experiment history
- */
-export const ClearHistoryResponse = zod.void()
-
-
-/**
- * @summary Delete a history entry
- */
-export const DeleteHistoryEntryParams = zod.object({
-  "id": zod.coerce.number().int()
-})
-
-export const DeleteHistoryEntryResponse = zod.void()
 
 

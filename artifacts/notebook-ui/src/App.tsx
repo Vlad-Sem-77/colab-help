@@ -6,7 +6,6 @@ import { NotebookSessionProvider } from "@/components/notebook-session";
 import NotFound from "@/pages/not-found";
 import { Layout } from "@/components/layout";
 import Home from "@/pages/home";
-import HistoryPage from "@/pages/history";
 
 const queryClient = new QueryClient();
 
@@ -15,7 +14,6 @@ function Router() {
     <Layout>
       <Switch>
         <Route path="/" component={Home} />
-        <Route path="/history" component={HistoryPage} />
         <Route component={NotFound} />
       </Switch>
     </Layout>

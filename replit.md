@@ -9,8 +9,7 @@
 - `pnpm run typecheck` — полная проверка типов
 - `pnpm run build` — typecheck + сборка всех пакетов
 - `pnpm --filter @workspace/api-spec run codegen` — регенерация API хуков и Zod схем
-- `pnpm --filter @workspace/db run push` — применить изменения DB схемы (только dev)
-- Required env: `DATABASE_URL` — строка подключения к PostgreSQL
+- Required env: `SESSION_SECRET` — секрет для защиты пользовательских AI-сессий
 - Required env: `OPENROUTER_API_KEY` — ключ OpenRouter API (используется в Colab)
 
 ## Stack
@@ -18,17 +17,14 @@
 - pnpm workspaces, Node.js 24, TypeScript 5.9
 - Frontend: React + Vite + TanStack Query + wouter + shadcn/ui
 - API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
+- Validation: Zod
 - API codegen: Orval (from OpenAPI spec)
 - Build: esbuild (CJS bundle)
 
 ## Where things live
 
 - `lib/api-spec/openapi.yaml` — источник истины для всех API контрактов
-- `lib/db/src/schema/history.ts` — схема таблицы истории экспериментов
 - `artifacts/api-server/src/routes/colab.ts` — маршруты для взаимодействия с Colab
-- `artifacts/api-server/src/routes/history.ts` — маршруты истории экспериментов
 - `artifacts/colab-bridge/src/` — React фронтенд
 - `colab_backend.ipynb` — Colab-ноутбук (Flask + ngrok бэкенд)
 
@@ -36,13 +32,12 @@
 
 - Replit хранит OpenRouter API ключ в секретах; Colab получает его от пользователя интерактивно через `getpass` — ключ не хранится в коде
 - API сервер на Replit проксирует запросы к Colab (POST /api/colab/run), добавляя нормализацию ответов — фронтенд никогда не обращается к Colab напрямую
-- История экспериментов хранится в PostgreSQL на стороне Replit и записывается при каждом успешном запросе к Colab
+- Приложение не сохраняет централизованную историю запросов и запусков; ответы передаются клиенту без записи в базу
 - Colab-бэкенд — stateless Flask сервер: не хранит данные, только выполняет запросы к OpenRouter
 
 ## Product
 
 - Главная страница (Experiment Panel): подключение к Colab по ngrok URL, выбор режима модели (авто/ручной), настройка параметров, отправка задания, отображение карточки модели + метрик + ответа
-- История (History Log): список всех прошлых экспериментов с возможностью удаления
 - Генерация Python-кода для вставки в Colab-ноутбук
 - Скачивание TXT-отчёта с результатами эксперимента
 

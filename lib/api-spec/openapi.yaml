@@ -14,8 +14,6 @@ tags:
     description: Colab connection and execution
   - name: ai
     description: Direct AI-provider catalogs and notebook analysis
-  - name: history
-    description: Experiment history
 paths:
   /healthz:
     get:
@@ -178,7 +176,7 @@ paths:
       operationId: analyzeNotebook
       tags: [colab]
       summary: Answer a question about an uploaded notebook
-      description: Sends notebook text to the connected Colab model for analysis without executing notebook cells or adding the prompt to experiment history
+      description: Sends notebook text to the connected Colab model for analysis without executing notebook cells
       requestBody:
         required: true
         content:
@@ -430,47 +428,6 @@ paths:
           description: Provider key is not connected
         "502":
           description: Provider speech synthesis failed
-
-  /history:
-    get:
-      operationId: listHistory
-      tags: [history]
-      summary: Get experiment history
-      description: Returns the list of recent experiments
-      responses:
-        "200":
-          description: List of history entries
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/HistoryEntry"
-    delete:
-      operationId: clearHistory
-      tags: [history]
-      summary: Clear experiment history
-      description: Deletes all experiment history
-      responses:
-        "204":
-          description: History cleared
-
-  /history/{id}:
-    delete:
-      operationId: deleteHistoryEntry
-      tags: [history]
-      summary: Delete a history entry
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        "204":
-          description: Entry deleted
-        "404":
-          description: Entry not found
 
 components:
   securitySchemes:
@@ -887,36 +844,3 @@ components:
             $ref: "#/components/schemas/ComparisonItem"
         error:
           type: ["string", "null"]
-
-    HistoryEntry:
-      type: object
-      required: [id, taskType, mode, createdAt]
-      properties:
-        id:
-          type: integer
-        taskType:
-          type: string
-        mode:
-          type: string
-        model:
-          type: ["string", "null"]
-        prompt:
-          type: string
-        result:
-          type: ["string", "null"]
-        promptTokens:
-          type: ["integer", "null"]
-        completionTokens:
-          type: ["integer", "null"]
-        totalTokens:
-          type: ["integer", "null"]
-        executionTime:
-          type: ["number", "null"]
-        modelName:
-          type: ["string", "null"]
-        modelProvider:
-          type: ["string", "null"]
-        modelContextLength:
-          type: ["integer", "null"]
-        createdAt:
-          type: string

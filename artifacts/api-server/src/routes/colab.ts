@@ -2,7 +2,6 @@ import { Router, type IRouter } from "express";
 import fetch from "node-fetch";
 import fs from "fs";
 import path from "path";
-import { db, historyTable } from "@workspace/db";
 import {
   AnalyzeNotebookBody,
   ExecuteNotebookCellInColabBody,
@@ -263,16 +262,11 @@ router.post("/colab/run", async (req, res): Promise<void> => {
       description: null,
     } : undefined);
 
-    const promptTokens = Number(metricsRaw?.["prompt_tokens"] ?? usageRaw?.["prompt_tokens"] ?? 0);
-    const completionTokens = Number(metricsRaw?.["completion_tokens"] ?? usageRaw?.["completion_tokens"] ?? 0);
-    const totalTokens = Number(metricsRaw?.["total_tokens"] ?? usageRaw?.["total_tokens"] ?? 0);
-    const executionTime = Number(metricsRaw?.["execution_time"] ?? data["execution_time"] ?? 0);
-
     const metrics = {
-      promptTokens,
-      completionTokens,
-      totalTokens,
-      executionTime,
+      promptTokens: Number(metricsRaw?.["prompt_tokens"] ?? usageRaw?.["prompt_tokens"] ?? 0),
+      completionTokens: Number(metricsRaw?.["completion_tokens"] ?? usageRaw?.["completion_tokens"] ?? 0),
+      totalTokens: Number(metricsRaw?.["total_tokens"] ?? usageRaw?.["total_tokens"] ?? 0),
+      executionTime: Number(metricsRaw?.["execution_time"] ?? data["execution_time"] ?? 0),
     };
 
     const resultText = String(data["result"] ?? data["text"] ?? "");
@@ -289,21 +283,6 @@ router.post("/colab/run", async (req, res): Promise<void> => {
       },
       error: c["error"] ? String(c["error"]) : null,
     }));
-
-    await db.insert(historyTable).values({
-      taskType,
-      mode,
-      model: modelCard?.id ?? model ?? null,
-      prompt: params.prompt,
-      result: resultText || null,
-      promptTokens: promptTokens || null,
-      completionTokens: completionTokens || null,
-      totalTokens: totalTokens || null,
-      executionTime: executionTime || null,
-      modelName: modelCard?.name ?? null,
-      modelProvider: modelCard?.topProvider ?? null,
-      modelContextLength: modelCard?.contextLength ?? null,
-    }).catch(() => {});
 
     res.json({
       status: "ok",

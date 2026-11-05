@@ -39,7 +39,6 @@ export * from './experimentResultStatus';
 export * from './freeModel';
 export * from './freeModelsResult';
 export * from './healthStatus';
-export * from './historyEntry';
 export * from './listAiModelsParams';
 export * from './modelCard';
 export * from './notebookAnalysisInput';

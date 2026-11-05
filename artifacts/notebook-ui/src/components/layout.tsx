@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { Book, History, Monitor, Waves } from "lucide-react";
+import { Book, Monitor, Waves } from "lucide-react";
 
 type NotebookTheme = "light-waves" | "windows95";
 
@@ -89,12 +89,6 @@ export function Layout({ children }: { children: ReactNode }) {
                 <div className={`notebook-nav-link flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer transition-colors ${location === '/' ? 'bg-primary/10 text-primary' : 'hover:bg-muted text-muted-foreground hover:text-foreground'}`}>
                   <Book className="w-5 h-5" />
                   <span className="font-medium">Notebook</span>
-                </div>
-              </Link>
-              <Link href="/history">
-                <div className={`notebook-nav-link flex items-center gap-3 px-3 py-2 rounded-md cursor-pointer transition-colors ${location === '/history' ? 'bg-primary/10 text-primary' : 'hover:bg-muted text-muted-foreground hover:text-foreground'}`}>
-                  <History className="w-5 h-5" />
-                  <span className="font-medium">History</span>
                 </div>
               </Link>
             </div>

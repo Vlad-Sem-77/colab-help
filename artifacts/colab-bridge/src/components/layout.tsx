@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { BeakerIcon, HistoryIcon, ActivityIcon } from "lucide-react";
+import { BeakerIcon, ActivityIcon } from "lucide-react";
 import { useHealthCheck, getHealthCheckQueryKey } from "@workspace/api-client-react";
 
 export default function Layout({ children }: { children: React.ReactNode }) {
@@ -25,12 +25,6 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             <div className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm cursor-pointer transition-colors ${location === '/' ? 'bg-sidebar-primary text-sidebar-primary-foreground font-medium' : 'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground text-sidebar-foreground/80'}`}>
               <ActivityIcon className="h-4 w-4" />
               <span>Experiment Panel</span>
-            </div>
-          </Link>
-          <Link href="/history">
-            <div className={`flex items-center gap-3 px-3 py-2 rounded-md text-sm cursor-pointer transition-colors ${location === '/history' ? 'bg-sidebar-primary text-sidebar-primary-foreground font-medium' : 'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground text-sidebar-foreground/80'}`}>
-              <HistoryIcon className="h-4 w-4" />
-              <span>History Log</span>
             </div>
           </Link>
         </nav>

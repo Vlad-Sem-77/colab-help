@@ -338,32 +338,6 @@ export interface ExperimentResult {
   error?: string | null;
 }
 
-export interface HistoryEntry {
-  id: number;
-  taskType: string;
-  mode: string;
-  /** @nullable */
-  model?: string | null;
-  prompt?: string;
-  /** @nullable */
-  result?: string | null;
-  /** @nullable */
-  promptTokens?: number | null;
-  /** @nullable */
-  completionTokens?: number | null;
-  /** @nullable */
-  totalTokens?: number | null;
-  /** @nullable */
-  executionTime?: number | null;
-  /** @nullable */
-  modelName?: string | null;
-  /** @nullable */
-  modelProvider?: string | null;
-  /** @nullable */
-  modelContextLength?: number | null;
-  createdAt: string;
-}
-
 export type DownloadExecutionBridgeNotebook200 = { [key: string]: unknown };
 
 export type ListAiModelsParams = {
