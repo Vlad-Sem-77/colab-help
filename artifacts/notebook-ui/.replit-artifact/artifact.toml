@@ -1,5 +1,5 @@
 kind = "web"
-previewPath = "/notebook/"
+previewPath = "/"
 title = "Notebook UI"
 version = "1.0.0"
 id = "artifacts/notebook-ui"
@@ -11,7 +11,7 @@ version = "1.0.0"
 
 [[services]]
 name = "web"
-paths = [ "/notebook/" ]
+paths = [ "/" ]
 localPort = 26268
 
 [services.development]
@@ -28,4 +28,4 @@ to = "/index.html"
 
 [services.env]
 PORT = "26268"
-BASE_PATH = "/notebook/"
+BASE_PATH = "/"
