@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { Link, useLocation } from "wouter";
 import { Book, Monitor, Waves } from "lucide-react";
 import { RotatingEye } from "./rotating-eye";
+import { Win95Eye } from "./win95-eye";
 
 type NotebookTheme = "light-waves" | "windows95";
 
@@ -81,7 +82,11 @@ export function Layout({ children }: { children: ReactNode }) {
         <aside className="notebook-sidebar w-64 border-r border-border bg-card flex flex-col h-full">
           <div className="notebook-brand p-4 border-b border-border">
             <div className="flex items-center gap-2">
-              <RotatingEye size={32} className="shrink-0" />
+              {theme === "windows95" ? (
+                <Win95Eye size={32} className="shrink-0" />
+              ) : (
+                <RotatingEye size={32} className="shrink-0" />
+              )}
               <h1 className="text-xl font-bold font-mono tracking-tighter">Notebook UI</h1>
             </div>
           </div>
