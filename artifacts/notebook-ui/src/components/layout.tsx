@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { Book, Monitor, Waves } from "lucide-react";
+import { RotatingEye } from "./rotating-eye";
 
 type NotebookTheme = "light-waves" | "windows95";
 
@@ -79,7 +80,10 @@ export function Layout({ children }: { children: ReactNode }) {
       <div className="notebook-app-shell flex h-screen w-full bg-background text-foreground overflow-hidden">
         <aside className="notebook-sidebar w-64 border-r border-border bg-card flex flex-col h-full">
           <div className="notebook-brand p-4 border-b border-border">
-            <h1 className="text-xl font-bold font-mono tracking-tighter">Notebook UI</h1>
+            <div className="flex items-center gap-2">
+              <RotatingEye size={32} className="shrink-0" />
+              <h1 className="text-xl font-bold font-mono tracking-tighter">Notebook UI</h1>
+            </div>
           </div>
 
           <nav className="notebook-sidebar-nav flex-1 p-4" aria-label="Основная навигация">
