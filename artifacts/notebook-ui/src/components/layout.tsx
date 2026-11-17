@@ -87,7 +87,10 @@ export function Layout({ children }: { children: ReactNode }) {
               ) : (
                 <RotatingEye size={32} className="shrink-0" />
               )}
-              <h1 className="text-xl font-bold font-mono tracking-tighter">Notebook UI</h1>
+              <h1 className="text-xl font-bold font-mono tracking-tighter">
+                Notebook UI
+                <span className="ml-1 text-xs font-normal tracking-normal opacity-70">by VladS</span>
+              </h1>
             </div>
           </div>
 
