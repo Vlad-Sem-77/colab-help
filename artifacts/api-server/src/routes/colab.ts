@@ -14,36 +14,10 @@ import {
   FetchFreeModelsBody,
   RunExperimentBody,
 } from "@workspace/api-zod";
+import { isAllowedColabUrl } from "../lib/colab-url";
 import { extractNotebookSourceIndexes } from "../lib/notebook-sources";
 
 const router: IRouter = Router();
-const allowedColabHostSuffixes = [
-  "trycloudflare.com",
-  "ngrok-free.app",
-  "ngrok.app",
-  "ngrok.io",
-];
-
-function isAllowedColabUrl(rawUrl: string): boolean {
-  try {
-    const url = new URL(rawUrl);
-    const isKnownTunnel = allowedColabHostSuffixes.some(
-      (suffix) => url.hostname === suffix || url.hostname.endsWith(`.${suffix}`),
-    );
-    return (
-      url.protocol === "https:" &&
-      !url.username &&
-      !url.password &&
-      !url.port &&
-      !url.search &&
-      !url.hash &&
-      (url.pathname === "/" || url.pathname === "") &&
-      isKnownTunnel
-    );
-  } catch {
-    return false;
-  }
-}
 
 router.get("/colab/notebook", (_req, res): void => {
   const notebookPath = path.resolve(process.cwd(), "..", "..", "colab_backend.ipynb");
@@ -134,12 +108,17 @@ router.post("/colab/execute", async (req, res): Promise<void> => {
     res.status(400).json({ status: "error", stdout: "", stderr: "colabUrl and code are required" });
     return;
   }
+  if (!isAllowedColabUrl(colabUrl)) {
+    res.status(400).json({ status: "error", stdout: "", stderr: "Use a supported HTTPS Colab tunnel URL." });
+    return;
+  }
   try {
-    const response = await fetch(`${colabUrl}/execute`, {
+    const response = await fetch(new URL("/execute", colabUrl).toString(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ code }),
       signal: AbortSignal.timeout(60000),
+      redirect: "error",
     });
     const data = await response.json();
     res.json(data);
@@ -156,8 +135,15 @@ router.post("/colab/ping", async (req, res): Promise<void> => {
     return;
   }
   const { colabUrl } = parsed.data;
+  if (!isAllowedColabUrl(colabUrl)) {
+    res.status(400).json({ online: false, message: "Use a supported HTTPS Colab tunnel URL." });
+    return;
+  }
   try {
-    const response = await fetch(`${colabUrl}/health`, { signal: AbortSignal.timeout(6000) });
+    const response = await fetch(new URL("/health", colabUrl).toString(), {
+      signal: AbortSignal.timeout(6000),
+      redirect: "error",
+    });
     if (response.ok) {
       res.json({ online: true, message: "Colab server is online" });
     } else {
@@ -176,9 +162,14 @@ router.post("/colab/models", async (req, res): Promise<void> => {
     return;
   }
   const { colabUrl } = parsed.data;
+  if (!isAllowedColabUrl(colabUrl)) {
+    res.status(400).json({ error: "Use a supported HTTPS Colab tunnel URL." });
+    return;
+  }
   try {
-    const response = await fetch(`${colabUrl}/models/free`, {
+    const response = await fetch(new URL("/models/free", colabUrl).toString(), {
       signal: AbortSignal.timeout(15000),
+      redirect: "error",
     });
     if (!response.ok) {
       res.status(502).json({ error: `Colab returned HTTP ${response.status}` });
@@ -211,6 +202,10 @@ router.post("/colab/run", async (req, res): Promise<void> => {
   }
 
   const { colabUrl, taskType, mode, model, models: modelList, params } = parsed.data;
+  if (!isAllowedColabUrl(colabUrl)) {
+    res.status(400).json({ error: "Use a supported HTTPS Colab tunnel URL." });
+    return;
+  }
 
   const payload = {
     task_type: taskType,
@@ -227,11 +222,12 @@ router.post("/colab/run", async (req, res): Promise<void> => {
   };
 
   try {
-    const response = await fetch(`${colabUrl}/run`, {
+    const response = await fetch(new URL("/run", colabUrl).toString(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
       signal: AbortSignal.timeout(90000),
+      redirect: "error",
     });
 
     if (!response.ok) {
@@ -352,6 +348,7 @@ router.post("/colab/analyze-notebook", async (req, res): Promise<void> => {
         },
       }),
       signal: AbortSignal.timeout(90000),
+      redirect: "error",
     });
 
     if (!response.ok) {

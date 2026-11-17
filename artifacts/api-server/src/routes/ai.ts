@@ -16,6 +16,13 @@ const router: IRouter = Router();
 
 type ProviderId = AiCatalogProviderId;
 type ModelInfo = AiCatalogModel;
+type ExplainNotebookCellsRequest = {
+  providerId: ProviderId;
+  modelId: string;
+  profile: "review" | "economy";
+  notebookContext: string;
+  targetCellIndex?: number;
+};
 
 type ProviderConfig = {
   id: ProviderId;
@@ -491,7 +498,8 @@ router.post("/ai/explain-notebook-cells", requireSameOrigin, limitAiRequests, as
     return;
   }
 
-  const { providerId, modelId, profile, notebookContext, targetCellIndex } = parsedBody.data;
+  const { providerId, modelId, profile, notebookContext, targetCellIndex } =
+    parsedBody.data as ExplainNotebookCellsRequest;
   if (
     targetCellIndex !== undefined
     && !notebookContext.split(/\r?\n/).some((line) => line.startsWith(`[Ячейка ${targetCellIndex + 1} ·`))
