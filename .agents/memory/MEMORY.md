@@ -1,2 +1,3 @@
 - [Notebook reader and AI providers](notebook-reader-model.md) — local simulation stays separate; session keys are never persisted and notebook text is sent only after consent.
 - [Notebook themes](notebook-themes.md) — keep both Light Waves and Windows 95 available as user-selectable Notebook UI styles.
+- [Workspace esbuild compatibility](esbuild-compatibility.md) — keep Vite's esbuild separate from the API's pino plugin; their supported version ranges differ.
